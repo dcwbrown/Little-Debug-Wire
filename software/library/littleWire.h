@@ -57,7 +57,7 @@
 // Voltage ref definition
 #define VREF_VCC 0
 #define VREF_1100mV 1
-#define VREF_2560mV 2 
+#define VREF_2560mV 2
 
 // I2C definition
 #define END_WITH_STOP 1
@@ -107,7 +107,7 @@ typedef usb_dev_handle littleWire;
 typedef struct lwCollection
 {
   struct usb_device* lw_device;
-  int serialNumber;  
+  int serialNumber;
 } lwCollection;
 
 extern lwCollection lwResults[16];
@@ -124,7 +124,7 @@ extern int lw_totalDevices;
 int littlewire_search();
 
 /**
-  * Tries to connect to the spesific littleWire device by array id. 
+  * Tries to connect to the spesific littleWire device by array id.
   *
   * @param desiredID array index of the lwResults array.
   * @return littleWire pointer for healthy connection, NULL for a failed trial.
@@ -133,7 +133,7 @@ littleWire* littlewire_connect_byID(int desiredID);
 
 /**
   * Tries to connect to the spesific littleWire with a given serial number. \n
-  * If multiple devices have the same serial number, it connects to the last one it finds 
+  * If multiple devices have the same serial number, it connects to the last one it finds
   *
   * @param mySerial Serial number of the desired littlewire device.
   * @return littleWire pointer for healthy connection, NULL for a failed trial.
@@ -141,7 +141,7 @@ littleWire* littlewire_connect_byID(int desiredID);
 littleWire* littlewire_connect_bySerialNum(int mySerial);
 
 /**
-  * Tries to connect to the first littleWire device that libusb can find. 
+  * Tries to connect to the first littleWire device that libusb can find.
   *
   * @param (none)
   * @return littleWire pointer for healthy connection, NULL for a failed trial.
@@ -154,12 +154,12 @@ littleWire* littleWire_connect();
   *
   * @param (none)
   * @return Firmware version
-  */ 
+  */
 unsigned char readFirmwareVersion(littleWire* lwHandle);
 
 /**
-  * Changes the USB serial number of the Little Wire 
-  * 
+  * Changes the USB serial number of the Little Wire
+  *
   * @param serialNumber Serial number integer value (100-99)
   * @return (none)
   */
@@ -232,7 +232,7 @@ void pinMode(littleWire* lwHandle, unsigned char pin, unsigned char mode);
 unsigned char digitalRead(littleWire* lwHandle, unsigned char pin);
 
 /**
-  * Sets the state of the internal pullup resistor. 
+  * Sets the state of the internal pullup resistor.
   * \n Call this function after you assign the pin as an input.
   *
   * @param lwHandle littleWire device pointer
@@ -277,7 +277,7 @@ unsigned int analogRead(littleWire* lwHandle, unsigned char channel);
 */
 
 /**
-  * Initialize the PWM module on the Little-Wire 
+  * Initialize the PWM module on the Little-Wire
   *
   * @param lwHandle littleWire device pointer
   * @return (none)
@@ -285,7 +285,7 @@ unsigned int analogRead(littleWire* lwHandle, unsigned char channel);
 void pwm_init(littleWire* lwHandle);
 
 /**
-  * Stop the PWM module on the Little-Wire 
+  * Stop the PWM module on the Little-Wire
   *
   * @param lwHandle littleWire device pointer
   * @return (none)
@@ -306,7 +306,7 @@ void pwm_updateCompare(littleWire* lwHandle, unsigned char channelA, unsigned ch
   * Update the prescaler of the PWM module. Adjust this value according to your need for speed in PWM output. Default is 1024. Lower prescale means higher frequency PWM output.
   *
   * @param lwHandle littleWire device pointer
-  * @param value Presecaler value (\b 1024, \b 256, \b 64, \b 8 or \b 1) 
+  * @param value Presecaler value (\b 1024, \b 256, \b 64, \b 8 or \b 1)
   * @return (none)
   */
 void pwm_updatePrescaler(littleWire* lwHandle, unsigned int value);
@@ -319,7 +319,7 @@ void pwm_updatePrescaler(littleWire* lwHandle, unsigned int value);
 */
 
 /**
-  * Initialize the SPI module on the Little-Wire 
+  * Initialize the SPI module on the Little-Wire
   *
   * @param lwHandle littleWire device pointer
   * @return (none)
@@ -327,7 +327,7 @@ void pwm_updatePrescaler(littleWire* lwHandle, unsigned int value);
 void spi_init(littleWire* lwHandle);
 
 /**
-  * Send SPI message(s). SPI Mode is 0. 
+  * Send SPI message(s). SPI Mode is 0.
   *
   * @param lwHandle littleWire device pointer
   * @param sendBuffer Message array to send
@@ -349,11 +349,11 @@ void spi_sendMessage(littleWire* lwHandle, unsigned char * sendBuffer, unsigned 
 unsigned char debugSpi(littleWire* lwHandle, unsigned char message);
 
 /**
-  * Change the SPI message frequency by adjusting delay duration. By default, Little-Wire sends the SPI messages with maximum speed. 
+  * Change the SPI message frequency by adjusting delay duration. By default, Little-Wire sends the SPI messages with maximum speed.
   * \n If your hardware can't catch up with the speed, increase the duration value to lower the SPI speed.
   *
   * @param lwHandle littleWire device pointer
-  * @param duration Amount of delay. 
+  * @param duration Amount of delay.
   * @return (none)
   */
 void spi_updateDelay(littleWire* lwHandle, unsigned int duration);
@@ -366,7 +366,7 @@ void spi_updateDelay(littleWire* lwHandle, unsigned int duration);
   */
 
 /**
-  * Initialize the I2C module on the Little-Wire 
+  * Initialize the I2C module on the Little-Wire
   *
   * @return (none)
   */
@@ -395,7 +395,7 @@ void i2c_write(littleWire* lwHandle, unsigned char* sendBuffer, unsigned char le
 
 /**
   * Read byte(s) over i2c bus
-  * 
+  *
   * @param lwHandle littleWire device pointer
   * @param readBuffer Returned message array
   * @param length Message length -> Max = 8
@@ -406,14 +406,14 @@ void i2c_read(littleWire* lwHandle, unsigned char* readBuffer, unsigned char len
 
 /**
   * Update i2c signal delay amount. Tune if neccessary to fit your requirements.
-  * 
+  *
   * @param lwHandle littleWire device pointer
   * @param duration Delay amount
   * @return (none)
   */
 void i2c_updateDelay(littleWire* lwHandle, unsigned int duration);
 
-/*! @} */ 
+/*! @} */
 
 /*! \addtogroup Onewire
  *  @brief Onewire functions.
@@ -423,7 +423,7 @@ void i2c_updateDelay(littleWire* lwHandle, unsigned int duration);
 /**
   * Send a single bit over onewire bus.
   *
-  * @param lwHandle littleWire device pointer  
+  * @param lwHandle littleWire device pointer
   * @param bitValue \b 1 or \b 0
   * @return (none)
   */
@@ -456,7 +456,7 @@ unsigned char onewire_readBit(littleWire* lwHandle);
 
 /**
   * Send a reset pulse over onewire bus
-  * 
+  *
   * @param lwHandle littleWire device pointer
   * @return Nonzero if any device presents on the bus
   */
@@ -466,7 +466,7 @@ unsigned char onewire_resetPulse(littleWire* lwHandle);
   * Start searching for device address on the onewire bus.
   * \n Read the 8 byte address from \b ROM_NO array
   *
-  * @param lwHandle littleWire device pointer  
+  * @param lwHandle littleWire device pointer
   * @return Nonzero if any device found
   */
 int onewire_firstAddress(littleWire* lwHandle);
@@ -475,12 +475,12 @@ int onewire_firstAddress(littleWire* lwHandle);
   * Try to find the next adress on the onewire bus.
   * \n Read the 8 byte address from \b ROM_NO array
   *
-  * @param lwHandle littleWire device pointer  
+  * @param lwHandle littleWire device pointer
   * @return Nonzero if any new device found
   */
 int onewire_nextAddress(littleWire* lwHandle);
 
-/*! @} */ 
+/*! @} */
 
 /*! \addtogroup SOFT_PWM
   *  @brief Software PWM functions. Designed to be used with RGB LEDs.
@@ -489,7 +489,7 @@ int onewire_nextAddress(littleWire* lwHandle);
 
 /**
   * Sets the state of the softPWM module
-  * 
+  *
   * @param lwHandle littleWire device pointer
   * @param state State of the softPWM module ( \b ENABLE or \b DISABLE )
   * @return (none)
@@ -509,7 +509,7 @@ void softPWM_write(littleWire* lwHandle,unsigned char ch1,unsigned char ch2,unsi
 
 /*! @} */
 
-/*! @} */ 
+/*! @} */
 
 /*! \addtogroup WS2812
   *  @brief WS2812 programmable RGB-LED support
@@ -555,8 +555,22 @@ void ws2812_flush(littleWire* lwHandle, unsigned char pin);
   */
 void ws2812_preload(littleWire* lwHandle, unsigned char r,unsigned char g,unsigned char b);
 
+
+
+
+
+
+
+int dw_connect(littleWire* lwHandle);
+int dw_transfer(littleWire* lwHandle, char *out, int outlen, char *in, int inlen);
+
+
+
+
+
+
   /*! @} */
-  
+
 
 /**
 * @mainpage Introduction

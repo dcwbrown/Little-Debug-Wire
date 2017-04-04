@@ -1,0 +1,2135 @@
+	.file	"main.c"
+__SP_H__ = 0x3e
+__SP_L__ = 0x3d
+__SREG__ = 0x3f
+__tmp_reg__ = 0
+__zero_reg__ = 1
+	.section	.text.spi,"ax",@progbits
+	.type	spi, @function
+spi:
+/* prologue: function */
+/* frame size = 0 */
+/* stack size = 0 */
+.L__stack_usage = 0
+	movw r30,r24
+	movw r26,r22
+	movw r20,r24
+	subi r20,-4
+	sbci r21,-1
+.L5:
+	ld r22,Z+
+	ldi r18,lo8(8)
+	ldi r19,0
+	ldi r24,lo8(-128)
+	ldi r25,0
+.L4:
+	mov r23,r24
+	and r23,r22
+	breq .L2
+	sbi 0x18,0
+.L2:
+	lds r23,sck_period
+/* #APP */
+ ;  643 "main.c" 1
+	 mov __tmp_reg__,r23  
+0: rjmp  1f          
+1: nop               
+2: nop               
+3: nop               
+ dec __tmp_reg__     
+ brne  0b            
+
+ ;  0 "" 2
+/* #NOAPP */
+	sbi 0x18,2
+	lds r23,sck_period
+/* #APP */
+ ;  643 "main.c" 1
+	 mov __tmp_reg__,r23  
+0: rjmp  1f          
+1: nop               
+2: nop               
+3: nop               
+ dec __tmp_reg__     
+ brne  0b            
+
+ ;  0 "" 2
+/* #NOAPP */
+	lsl r25
+	sbic 0x16,1
+	subi r25,lo8(-(1))
+.L3:
+	cbi 0x18,0
+	cbi 0x18,2
+	lsr r24
+	subi r18,1
+	sbc r19,__zero_reg__
+	brne .L4
+	st X+,r25
+	cp r30,r20
+	cpc r31,r21
+	brne .L5
+/* epilogue start */
+	ret
+	.size	spi, .-spi
+	.section	.text.spi_rw,"ax",@progbits
+	.type	spi_rw, @function
+spi_rw:
+/* prologue: function */
+/* frame size = 0 */
+/* stack size = 0 */
+.L__stack_usage = 0
+	lds r24,address
+	lds r25,address+1
+	movw r18,r24
+	subi r18,-1
+	sbci r19,-1
+	sts address+1,r19
+	sts address,r18
+	lds r18,cmd0
+	sbrs r18,7
+	rjmp .L16
+	lsl r24
+	rol r25
+.L16:
+	sbrc r24,0
+	ori r18,lo8(8)
+.L19:
+	sts cmd,r18
+	mov r18,r25
+	lsr r18
+	sts cmd+1,r18
+	lsr r25
+	ror r24
+	sts cmd+2,r24
+	ldi r22,lo8(res)
+	ldi r23,hi8(res)
+	ldi r24,lo8(cmd)
+	ldi r25,hi8(cmd)
+	rjmp spi
+	.size	spi_rw, .-spi_rw
+	.section	.text.dwInitRead,"ax",@progbits
+.global	dwInitRead
+	.type	dwInitRead, @function
+dwInitRead:
+/* prologue: function */
+/* frame size = 0 */
+/* stack size = 0 */
+.L__stack_usage = 0
+	cbi 0x17,5
+	cbi 0x18,5
+	ret
+	.size	dwInitRead, .-dwInitRead
+	.section	.text.dwInitWrite,"ax",@progbits
+.global	dwInitWrite
+	.type	dwInitWrite, @function
+dwInitWrite:
+/* prologue: function */
+/* frame size = 0 */
+/* stack size = 0 */
+.L__stack_usage = 0
+	sbi 0x18,5
+	sbi 0x17,5
+	ret
+	.size	dwInitWrite, .-dwInitWrite
+	.section	.text.dwConnect,"ax",@progbits
+.global	dwConnect
+	.type	dwConnect, @function
+dwConnect:
+/* prologue: function */
+/* frame size = 0 */
+/* stack size = 0 */
+.L__stack_usage = 0
+/* #APP */
+ ;  305 "main.c" 1
+	                                                                                          
+;       dwConnect - enable device debugWire and determine baud rate.                      
+                                                                                          
+        cbi   0x18,5          ; 2. Set PORTB 5 (reset/dwire) to 0                         
+        sbi   0x17,5          ; 2. Set PORTB 5 (reset/dwire) direction output             
+        clr   r24             ; 1. Result - count of measured pulses recorded in dwWidths 
+                                                                                          
+;       Delay 100 ms with reset held low to trigger device debugWIRE                      
+                                                                                          
+        clr   r25             ; 1. Outer loop counter for 100ms delay                     
+                                                                                          
+dwc2:   inc   r25                                                                         
+        cpi   r25,6                                                                       
+        brsh  dwc6            ; If 20ms loop has been executed 5 times = approx 1 ms      
+                                                                                          
+        clr   r30                                                                         
+        clr   r31                                                                         
+                                                                                          
+;       Inner loop is for 65536 * 5 cycles = approx 20ms                                  
+                                                                                          
+dwc4:   adiw  r30,1           ; 2.                                                        
+        brcs  dwc2            ; 1/2.                                                      
+        rjmp  dwc4            ; 2.                                                        
+                                                                                          
+dwc6:   cbi   0x17,5          ; Set PORTB 5 (reset/dwire) direction input                 
+                                                                                          
+;       Measure pulse dwWidths and store in dwWidths array                                
+                                                                                          
+        ldi   r26,lo8(dwWidths)                                                           
+        ldi   r27,hi8(dwWidths)                                                           
+                                                                                          
+;       Cycle loop - track a high pulse followed by a low pulse                           
+                                                                                          
+dwc8:   clr   r30             ; 1.                                                        
+        clr   r31             ; 1.                                                        
+                                                                                          
+;       Loop while pin high                                                               
+                                                                                          
+dwc10:  adiw  r30,1           ; 2.                                                        
+        brcs  dwc14           ; 1/2. If no change in 65536 loops (~24ms)                  
+        sbic  0x16,5          ; 1/2. Skip if Pin PB5 clear (space, zero)                  
+        rjmp  dwc10           ; 2.                                                        
+                                                                                          
+        cpi   r24,20          ; 1.  Logically this test would be more                     
+                              ;     sensible at the start of the main dwc8                
+                              ;     loop. It is here instead using 2 cycles at            
+                              ;     the end of a low pulse in order to balance            
+                              ;     the 2 cycles taken by the 'rjmp dwc8' at              
+                              ;     the end of the high pulse.                            
+                                                                                          
+        brsh  dwc14           ; 1. If dwWidths buffer full                                
+                                                                                          
+        st    x+,r30          ; 2.                                                        
+        st    x+,r31          ; 2.                                                        
+        inc   r24             ; 1.                                                        
+                                                                                          
+        clr   r30             ; 1.                                                        
+        clr   r31             ; 1.                                                        
+                                                                                          
+;       Loop while pin low                                                                
+                                                                                          
+dwc12:  adiw  r30,1           ; 2.                                                        
+        brcs  dwc14           ; 1/2. If no change in 65536 loops (~24ms)                  
+        sbis  0x16,5          ; 1/2. Skip if Pin PB5 set (mark, one)                      
+        rjmp  dwc12           ; 2.                                                        
+                                                                                          
+        st    x+,r30          ; 2.                                                        
+        st    x+,r31          ; 2.                                                        
+        inc   r24             ; 1.                                                        
+                                                                                          
+        rjmp  dwc8            ; 2. Back to start of cycle loop                            
+                                                                                          
+dwc14:  sts   dwNWidths,r24                                                               
+
+ ;  0 "" 2
+/* #NOAPP */
+	sts dwCycles,__zero_reg__
+	sts dwCycles+1,__zero_reg__
+	sts dwCycles+2,__zero_reg__
+	sts dwCycles+3,__zero_reg__
+	lds r24,dwNWidths
+	cpi r24,lo8(11)
+	brlo .L22
+	lds r24,dwNWidths
+	subi r24,lo8(-(-2))
+	sts dwNWidths,r24
+	lds r30,dwNWidths
+	ldi r31,0
+	lsl r30
+	rol r31
+	subi r30,lo8(-(dwWidths))
+	sbci r31,hi8(-(dwWidths))
+	ld r24,Z
+	ldd r25,Z+1
+	ldi r26,0
+	ldi r27,0
+	sts dwCycles,r24
+	sts dwCycles+1,r25
+	sts dwCycles+2,r26
+	sts dwCycles+3,r27
+.L22:
+	ret
+	.size	dwConnect, .-dwConnect
+	.section	.text.dwSendByte,"ax",@progbits
+.global	dwSendByte
+	.type	dwSendByte, @function
+dwSendByte:
+/* prologue: function */
+/* frame size = 0 */
+/* stack size = 0 */
+.L__stack_usage = 0
+/* #APP */
+ ;  431 "main.c" 1
+	                                                                    
+;       Keep dwBitTime in x (r27:r26)                               
+                                                                    
+        lds   r26,dwBitTime                                         
+        lds   r27,dwBitTime+1                                       
+                                                                    
+;       Send start bit (space / 0)                                  
+                                                                    
+        movw  r30,r26         ; 1.   Load wait count to r31:r30     
+        cbi   0x18,5          ; 1.   Set dwire port low             
+                                                                    
+dws2:   sbiw  r30,1           ; 2.   Decrement wait count           
+        brne  dws2            ; 1/2. While more waiting required    
+                                                                    
+;      Prepare to send 8 data bits                                  
+                                                                    
+        mov   r25,r24                                               
+        ldi   r24,8                                                 
+                                                                    
+;       Loop for 8 bits                                             
+;       Each bit takes a total of 4*dwBitTime + 8 cycles.           
+                                                                    
+dws4:   sbrc  r25,1           ; 1/2. Skip if sending zero           
+        sbi   0x18,5          ; 1.   Set dwire port high            
+        sbrs  r25,1           ; 1/2. Skip if sending one            
+        cbi   0x18,5          ; 1.   Set dwire port low             
+        movw  r30,r26         ; 1.   Load wait count to r31:r30     
+                                                                    
+;       5 cycles from dws4 to here.                                 
+                                                                    
+dws6:   sbiw  r30,1           ; 2.   Decrement wait count           
+        brne  dws6            ; 1/2. While more waiting required    
+                                                                    
+;       4*dwBitTime+4 cycles from dws4 to here.                     
+                                                                    
+        lsr   r25             ; 1.                                  
+        dec   r24             ; 1.                                  
+        brne  dws4            ; 1/2.                                
+                                                                    
+;       Send stop bit (mark / 1)                                    
+                                                                    
+        movw  r30,r26         ; 1.   Load wait count to r31:r30     
+        sbi   0x18,5          ; 1.   Set dwire port high            
+                                                                    
+dws8:   sbiw  r30,1           ; 2.   Decrement wait count           
+        brne  dws8            ; 1/2. While more waiting required    
+                                                                    
+
+ ;  0 "" 2
+/* #NOAPP */
+	ret
+	.size	dwSendByte, .-dwSendByte
+	.section	.text.dwReceiveBytes,"ax",@progbits
+.global	dwReceiveBytes
+	.type	dwReceiveBytes, @function
+dwReceiveBytes:
+/* prologue: function */
+/* frame size = 0 */
+/* stack size = 0 */
+.L__stack_usage = 0
+/* #APP */
+ ;  497 "main.c" 1
+	                                                                                                  
+;       Register usage                                                                            
+;                                                                                                 
+;           r23 - accumulates received bit samples                                                
+;           r24 - remaining byte count to load                                                    
+;           r25 - remaining bits in byte counter                                                  
+;           x   - buffer insertion pointer (r27:r26)                                              
+;           z   - wait counter (r31:r30)                                                          
+;                                                                                                 
+                                                                                                  
+;       Initialise z (r31:r30) as buffer insertion pointer                                        
+                                                                                                  
+        ldi   r26,lo8(dwBuf)                                                                      
+        ldi   r27,hi8(dwBuf)                                                                      
+                                                                                                  
+;       Use r24 for remaining byte count.                                                         
+;       It will also be returned as result, if non-zero means failure.                            
+                                                                                                  
+        mov   r24,r25                                                                             
+                                                                                                  
+;       Wait up to 65536*6 cycles = 23ms for start bit                                            
+                                                                                                  
+dwr2:   clr   r30                                                                                 
+        clr   r31                                                                                 
+                                                                                                  
+dwr4:   sbiw  r30,1              ; 2.   Check for timeout                                         
+        breq  dwr18              ; 1/2. If no start bit ecountered in 65536*6 cycles              
+                                                                                                  
+        sbic  0x16,5             ; 1/2. Skip if Pin PB5 clear (space, zero)                       
+        rjmp  dwr4               ; 2.   While no start bit, continue waiting                      
+                                                                                                  
+;       Wait through 80 per cent of start bit                                                     
+;       If start bit ends early it is a glitch, go back to wait for start bit.                    
+                                                                                                  
+        lds   r30,dwStartWait    ; 2.                                                             
+        lds   r31,dwStartWait+1  ; 2.                                                             
+                                                                                                  
+dwr6:   sbic  0x16,5             ; 1/2. If still in start bit                                     
+        rjmp  dwr4               ; 2.   If start bit ended early go back and wait for start bit   
+                                                                                                  
+        sbiw  r30,1              ; 2.   Decrement wait count                                      
+        brne  dwr6               ; 1/2. If not yet 80% through start bit                          
+                                                                                                  
+;       Wait through remainder of start bit and half of bit 0                                     
+                                                                                                  
+        lds   r30,dwBit0Wait     ; 2.                                                             
+        lds   r31,dwBit0Wait+1   ; 2.                                                             
+                                                                                                  
+dwr8:   sbiw  r30,1              ; 2.                                                             
+        brne  dwr8               ; 1/2.                                                           
+                                                                                                  
+;       Sample 8 bits                                                                             
+                                                                                                  
+        ldi   r25,8              ; 1.                                                             
+        clr   r23                ; 1.                                                             
+                                                                                                  
+;       Sample one bit to bottom of r23                                                           
+                                                                                                  
+dwr10:  sbic  0x16,5             ; 1/2.                                                           
+        inc   r23                ; 1. Sets bottom bit of received character accumulator           
+                                                                                                  
+;       Wait for one bit time                                                                     
+                                                                                                  
+        lds   r30,dwBitWait      ; 2.                                                             
+        lds   r31,dwBitWait+1    ; 2.                                                             
+                                                                                                  
+dwr12:  sbiw  r30,1              ; 2.                                                             
+        brne  dwr12              ; 1/2.                                                           
+                                                                                                  
+;       Any more bits to load?                                                                    
+                                                                                                  
+        dec   r25                ; 1.                                                             
+        breq  dwr16              ; 1/2. If all 8 bits loaded                                      
+                                                                                                  
+        lsl   r23                ; 1.                                                             
+        rjmp  dwr10              ; 2.   Loop back to sample this bit and wait for next bit        
+                                                                                                  
+;       All bits sampled into r23.                                                                
+;       We should now be half way through the stop bit.                                           
+                                                                                                  
+;       Store received byte into dwBuf at z.                                                      
+                                                                                                  
+dwr16:  st    z+,r23             ; Store received byte in buffer                                  
+                                                                                                  
+;       Check for more bytes required                                                             
+                                                                                                  
+        dec   r24                ; Test if all bytes have been read                               
+        brne  dwr2               ; If more bytes required, loop back to wait for next start bit   
+                                                                                                  
+;       Exit with any remaining byte count unread in dwUnread                                     
+                                                                                                  
+dwr18:  sts   dwUnread,r12                                                                        
+
+ ;  0 "" 2
+/* #NOAPP */
+	ret
+	.size	dwReceiveBytes, .-dwReceiveBytes
+	.section	.text.usbDwFunctionWrite,"ax",@progbits
+.global	usbDwFunctionWrite
+	.type	usbDwFunctionWrite, @function
+usbDwFunctionWrite:
+	push r13
+	push r14
+	push r15
+	push r16
+	push r17
+	push r28
+	push r29
+	rcall .
+	in r28,__SP_L__
+	in r29,__SP_H__
+/* prologue: function */
+/* frame size = 2 */
+/* stack size = 9 */
+.L__stack_usage = 9
+	lds r18,dwWritePending
+	mov r13,r22
+	cp r18,r22
+	brsh .L27
+	mov r13,r18
+.L27:
+	sub r18,r13
+	sts dwWritePending,r18
+	in r14,__SREG__
+/* #APP */
+ ;  50 "d:\projects\avr\avr8-gnu-toolchain\avr\include\util\atomic.h" 1
+	cli
+ ;  0 "" 2
+/* #NOAPP */
+	cpse r13,__zero_reg__
+	rjmp .L28
+.L33:
+	lds r24,dwWritePending
+	tst r24
+	breq .L29
+	rjmp .L30
+.L28:
+	std Y+1,r24
+	std Y+2,r25
+	rcall dwInitWrite
+	ldd r24,Y+1
+	mov r15,r24
+	mov r16,r24
+	ldd r25,Y+2
+	mov r17,r25
+.L31:
+	mov r24,r16
+	sub r24,r15
+	cp r24,r13
+	brsh .L33
+	movw r30,r16
+	ld r24,Z+
+	movw r16,r30
+	rcall dwSendByte
+	rjmp .L31
+.L29:
+	lds r24,dwRequested
+	tst r24
+	breq .L30
+	rcall dwInitRead
+	lds r24,dwRequested
+	rcall dwReceiveBytes
+.L30:
+	out __SREG__,r14
+	ldi r24,lo8(1)
+	lds r25,dwWritePending
+	cpse r25,__zero_reg__
+	ldi r24,0
+.L34:
+/* epilogue start */
+	pop __tmp_reg__
+	pop __tmp_reg__
+	pop r29
+	pop r28
+	pop r17
+	pop r16
+	pop r15
+	pop r14
+	pop r13
+	ret
+	.size	usbDwFunctionWrite, .-usbDwFunctionWrite
+	.section	.text.usbFunctionRead,"ax",@progbits
+.global	usbFunctionRead
+	.type	usbFunctionRead, @function
+usbFunctionRead:
+	push r14
+	push r15
+	push r17
+	push r28
+	push r29
+	push __zero_reg__
+	in r28,__SP_L__
+	in r29,__SP_H__
+/* prologue: function */
+/* frame size = 1 */
+/* stack size = 6 */
+.L__stack_usage = 6
+	mov r17,r24
+	movw r14,r24
+.L42:
+	mov r24,r14
+	sub r24,r17
+	cp r24,r22
+	brsh .L44
+	std Y+1,r22
+	rcall spi_rw
+	lds r24,res+3
+	movw r30,r14
+	st Z+,r24
+	movw r14,r30
+	ldd r22,Y+1
+	rjmp .L42
+.L44:
+	mov r24,r22
+/* epilogue start */
+	pop __tmp_reg__
+	pop r29
+	pop r28
+	pop r17
+	pop r15
+	pop r14
+	ret
+	.size	usbFunctionRead, .-usbFunctionRead
+	.section	.text.usbFunctionWrite,"ax",@progbits
+.global	usbFunctionWrite
+	.type	usbFunctionWrite, @function
+usbFunctionWrite:
+	push r13
+	push r14
+	push r15
+	push r16
+	push r17
+	push r28
+	push r29
+/* prologue: function */
+/* frame size = 0 */
+/* stack size = 7 */
+.L__stack_usage = 7
+	lds r18,dwWritePending
+	cpse r18,__zero_reg__
+	rjmp .L46
+	mov r15,r22
+	mov r14,r24
+	movw r28,r24
+	ldi r19,lo8(96)
+	mov r13,r19
+	rjmp .L47
+.L46:
+/* epilogue start */
+	pop r29
+	pop r28
+	pop r17
+	pop r16
+	pop r15
+	pop r14
+	pop r13
+	rjmp usbDwFunctionWrite
+.L49:
+	lds r24,sck_period
+	ldi r25,0
+	ldi r18,5
+	1:
+	lsl r24
+	rol r25
+	dec r18
+	brne 1b
+	add r16,r24
+	adc r17,r25
+.L48:
+	lds r24,timeout
+	lds r25,timeout+1
+	cp r16,r24
+	cpc r17,r25
+	brsh .L47
+	ldi r22,lo8(res)
+	ldi r23,hi8(res)
+	ldi r24,lo8(cmd)
+	ldi r25,hi8(cmd)
+	rcall spi
+	lds r24,res+3
+	lds r25,cmd+3
+	cpse r24,r25
+	rjmp .L49
+	lds r25,poll1
+	cp r24,r25
+	breq .L49
+	lds r25,poll2
+	cp r24,r25
+	breq .L49
+.L47:
+	mov r24,r28
+	sub r24,r14
+	cp r24,r15
+	brsh .L53
+	ld r24,Y+
+	sts cmd+3,r24
+	rcall spi_rw
+	lds r24,cmd
+	eor r24,r13
+	sts cmd,r24
+	ldi r16,0
+	ldi r17,0
+	rjmp .L48
+.L53:
+	ldi r24,lo8(1)
+/* epilogue start */
+	pop r29
+	pop r28
+	pop r17
+	pop r16
+	pop r15
+	pop r14
+	pop r13
+	ret
+	.size	usbFunctionWrite, .-usbFunctionWrite
+	.section	.text.ws2812_sendarray_mask,"ax",@progbits
+.global	ws2812_sendarray_mask
+	.type	ws2812_sendarray_mask, @function
+ws2812_sendarray_mask:
+/* prologue: function */
+/* frame size = 0 */
+/* stack size = 0 */
+.L__stack_usage = 0
+	in r18,0x18
+	mov r19,r20
+	com r19
+	and r18,r19
+	in r19,0x18
+	or r20,r19
+	add r22,r24
+	adc r23,r25
+.L55:
+	cp r24,r22
+	cpc r25,r23
+	breq .L57
+	movw r30,r24
+	ld r19,Z+
+	movw r24,r30
+/* #APP */
+ ;  791 "main.c" 1
+	                                                
+         ldi   r21,8     ; 0                     
+loop405:  out   24,r20    ; 1                     
+         lsl   r19       ; 2                     
+         dec   r21       ; 3                     
+                                                
+         rjmp  .+0      ; 5                     
+                                                
+         brcs  .+2      ; 6l / 7h               
+         out   24,r18    ; 7l / -                
+                                                
+         rjmp  .+0      ; 9                     
+                                                
+         nop            ; 10                    
+         out   24,r18    ; 11                    
+         breq  end405    ; 12      nt. 13 taken  
+                                                
+         rjmp  .+0      ; 14                    
+         rjmp  .+0      ; 16                    
+         rjmp  .+0      ; 18                    
+         rjmp  loop405   ; 20                    
+end405:                                         
+
+ ;  0 "" 2
+/* #NOAPP */
+	rjmp .L55
+.L57:
+/* epilogue start */
+	ret
+	.size	ws2812_sendarray_mask, .-ws2812_sendarray_mask
+	.section	.text.usbFunctionSetup,"ax",@progbits
+.global	usbFunctionSetup
+	.type	usbFunctionSetup, @function
+usbFunctionSetup:
+	push r28
+	push r29
+/* prologue: function */
+/* frame size = 0 */
+/* stack size = 2 */
+.L__stack_usage = 2
+	movw r28,r24
+	ldd r18,Y+1
+	cpse r18,__zero_reg__
+	rjmp .L59
+	ldi r24,lo8(33)
+	std Y+1,r24
+	sts usbMsgPtr+1,r29
+	sts usbMsgPtr,r28
+	ldi r25,lo8(8)
+	rjmp .L60
+.L59:
+	cpi r18,lo8(1)
+	brne .L61
+	in r24,0x16
+	rjmp .L130
+.L61:
+	ldd r22,Y+2
+	cpi r18,lo8(2)
+	brne .L62
+	out 0x18,r22
+	rjmp .L129
+.L62:
+	mov r25,r22
+	mov r19,r22
+	andi r19,lo8(7)
+	ldi r20,lo8(1)
+	ldi r21,0
+	mov r0,r19
+	rjmp 2f
+	1:
+	lsl r20
+	rol r21
+	2:
+	dec r0
+	brpl 1b
+	cpi r18,lo8(3)
+	brne .+2
+	rjmp .L141
+	cpi r18,lo8(4)
+	brne .L64
+.L140:
+	in r24,0x18
+	or r20,r24
+.L134:
+	out 0x18,r20
+	rjmp .L129
+.L64:
+	cpi r18,lo8(5)
+	brne .L65
+	sts sck_period,r22
+	cbi 0x17,1
+	in r24,0x17
+	ori r24,lo8(37)
+	out 0x17,r24
+	in r24,0x18
+	andi r24,lo8(-40)
+	out 0x18,r24
+	rjmp .L129
+.L65:
+	cpi r18,lo8(6)
+	brne .L66
+	cbi 0x17,0
+	cbi 0x18,0
+	cbi 0x17,1
+	cbi 0x18,1
+	cbi 0x17,2
+	cbi 0x18,2
+	cbi 0x17,5
+	cbi 0x18,5
+	rjmp .L129
+.L66:
+	cpi r18,lo8(7)
+	brne .L67
+	movw r22,r28
+	movw r24,r28
+	adiw r24,2
+	rcall spi
+	sts usbMsgPtr+1,r29
+	sts usbMsgPtr,r28
+	ldi r25,lo8(4)
+	rjmp .L60
+.L67:
+	cpi r18,lo8(8)
+	brne .L68
+	sts poll1,r22
+	ldd r24,Y+3
+	sts poll2,r24
+	rjmp .L129
+.L68:
+	ldd r30,Y+4
+	ldd r31,Y+5
+	sts address+1,r31
+	sts address,r30
+	cpi r18,lo8(9)
+	brne .L69
+	ldi r24,lo8(32)
+	rjmp .L133
+.L69:
+	cpi r18,lo8(11)
+	brne .L70
+	ldi r24,lo8(-96)
+.L133:
+	sts cmd0,r24
+	rjmp .L132
+.L70:
+	ldd r24,Y+2
+	ldd r23,Y+3
+	sts timeout,r24
+	sts timeout+1,r23
+	cpi r18,lo8(10)
+	brne .L71
+	ldi r24,lo8(64)
+	rjmp .L133
+.L71:
+	cpi r18,lo8(12)
+	brne .L72
+	ldi r24,lo8(-64)
+	rjmp .L133
+.L72:
+	cpi r18,lo8(13)
+	brne .L73
+	in r24,0x17
+	com r20
+	and r20,r24
+	rjmp .L138
+.L73:
+	cpi r18,lo8(14)
+	brne .L74
+	in r24,0x17
+	or r20,r24
+.L138:
+	out 0x17,r20
+	rjmp .L129
+.L74:
+	cpi r18,lo8(15)
+	brne .L75
+	cpse r22,__zero_reg__
+	rjmp .L76
+	lds r24,adcSetting
+	out 0x7,r24
+	sbi 0x14,5
+	rjmp .L77
+.L76:
+	cpi r22,lo8(1)
+	brne .L78
+	lds r24,adcSetting
+	ori r24,lo8(1)
+	out 0x7,r24
+	sbi 0x14,2
+	rjmp .L77
+.L78:
+	cpi r22,lo8(2)
+	brne .L77
+	ldi r24,lo8(-113)
+	out 0x7,r24
+.L77:
+	sbi 0x6,6
+.L79:
+	sbic 0x6,6
+	rjmp .L79
+	in r24,0x4
+	st Y,r24
+	in r24,0x5
+	std Y+1,r24
+	sts usbMsgPtr+1,r29
+	sts usbMsgPtr,r28
+	out 0x14,__zero_reg__
+	ldi r25,lo8(2)
+	rjmp .L60
+.L75:
+	cpi r18,lo8(16)
+	brne .L80
+	sbi 0x17,0
+	sbi 0x17,1
+	in r24,0x2a
+	ori r24,lo8(-96)
+	out 0x2a,r24
+	in r24,0x2a
+	ori r24,lo8(3)
+	out 0x2a,r24
+	in r24,0x33
+	ori r24,lo8(5)
+	rjmp .L139
+.L80:
+	cpi r18,lo8(17)
+	brne .L81
+	out 0x29,r22
+	ldd r24,Y+4
+	out 0x28,r24
+	rjmp .L129
+.L81:
+	cpi r18,lo8(18)
+	brne .+2
+	rjmp .L140
+	cpi r18,lo8(19)
+	brne .L83
+.L141:
+	in r24,0x18
+	com r20
+	and r20,r24
+	rjmp .L134
+.L83:
+	cpi r18,lo8(20)
+	brne .L84
+	in r24,0x16
+	ldi r25,0
+	and r20,r24
+	and r21,r25
+	rjmp 2f
+	1:
+	asr r21
+	ror r20
+	2:
+	dec r19
+	brpl 1b
+	st Y,r20
+	rjmp .L131
+.L84:
+	cpi r18,lo8(22)
+	brne .L85
+	cpse r22,__zero_reg__
+	rjmp .L86
+	in r24,0x33
+	andi r24,lo8(-5)
+	out 0x33,r24
+	in r24,0x33
+	andi r24,lo8(-3)
+	out 0x33,r24
+	in r24,0x33
+	ori r24,lo8(1)
+	out 0x33,r24
+	rjmp .L60
+.L86:
+	cpi r22,lo8(1)
+	brne .L87
+	in r24,0x33
+	andi r24,lo8(-5)
+	out 0x33,r24
+	in r24,0x33
+	ori r24,lo8(2)
+	rjmp .L137
+.L87:
+	cpi r22,lo8(2)
+	brne .L88
+	in r24,0x33
+	andi r24,lo8(-5)
+	out 0x33,r24
+	in r24,0x33
+	ori r24,lo8(2)
+	rjmp .L142
+.L88:
+	cpi r22,lo8(3)
+	brne .L89
+	in r24,0x33
+	ori r24,lo8(4)
+	out 0x33,r24
+	in r24,0x33
+	andi r24,lo8(-3)
+.L137:
+	out 0x33,r24
+	in r24,0x33
+	andi r24,lo8(-2)
+.L139:
+	out 0x33,r24
+	rjmp .L129
+.L89:
+	cpi r22,lo8(4)
+	breq .+2
+	rjmp .L129
+	in r24,0x33
+	ori r24,lo8(4)
+	out 0x33,r24
+	in r24,0x33
+	andi r24,lo8(-3)
+.L142:
+	out 0x33,r24
+	in r24,0x33
+	ori r24,lo8(1)
+	rjmp .L139
+.L85:
+	cpi r18,lo8(31)
+	brne .L91
+	ldd r24,Y+3
+	ldi r25,0
+	mov r25,r24
+	clr r24
+	add r24,r22
+	adc r25,__zero_reg__
+	sts SPI_DELAY+1,r25
+	sts SPI_DELAY,r24
+	rjmp .L129
+.L91:
+	cpi r18,lo8(32)
+	brne .L92
+	out 0x2a,__zero_reg__
+	out 0x33,__zero_reg__
+	rjmp .L129
+.L92:
+	cpi r18,lo8(33)
+	brne .L93
+	sts rxBuffer,r22
+	ldi r24,lo8(1)
+	rjmp .L136
+.L93:
+	cpi r18,lo8(34)
+	brne .L94
+	ldi r24,lo8(19)
+.L130:
+	st Y,r24
+.L131:
+	sts usbMsgPtr+1,r29
+	sts usbMsgPtr,r28
+	ldi r25,lo8(1)
+	rjmp .L60
+.L94:
+	cpi r18,lo8(35)
+	brne .L95
+	sbi 0x6,7
+	in r25,0x6
+	ldd r24,Y+2
+	or r24,r25
+	out 0x6,r24
+	ldd r25,Y+3
+	cpi r25,lo8(1)
+	breq .L96
+	brlo .L97
+	cpi r25,lo8(2)
+	breq .+2
+	rjmp .L129
+	lds r24,adcSetting
+	ori r24,lo8(-112)
+	rjmp .L135
+.L97:
+	sts adcSetting,__zero_reg__
+	rjmp .L60
+.L96:
+	lds r24,adcSetting
+	ori r24,lo8(-128)
+.L135:
+	sts adcSetting,r24
+	rjmp .L129
+.L95:
+	cpi r18,lo8(40)
+	brne .L99
+	ldi r24,lo8(sendBuffer)
+	ldi r25,hi8(sendBuffer)
+	sts usbMsgPtr+1,r25
+	sts usbMsgPtr,r24
+	lds r25,sendBuffer+8
+	rjmp .L60
+.L99:
+	cpi r18,lo8(41)
+	brne .L100
+	ldi r24,lo8(2)
+	rjmp .L136
+.L100:
+	cpi r18,lo8(42)
+	brne .L101
+	ldi r24,lo8(3)
+	sts jobState,r24
+	sts rxBuffer,r22
+	rjmp .L129
+.L101:
+	cpi r18,lo8(43)
+	brne .L102
+	ldi r24,lo8(4)
+	rjmp .L136
+.L102:
+	cpi r18,lo8(47)
+	brne .L103
+	cpi r22,lo8(1)
+	brne .L104
+	sbi 0x17,0
+	sbi 0x17,1
+	sbi 0x17,2
+	sts softPWM,r22
+	rjmp .L129
+.L104:
+	sts softPWM,__zero_reg__
+	rjmp .L129
+.L103:
+	cpi r18,lo8(48)
+	brne .L105
+	sts compare0,r22
+	ldd r24,Y+3
+	sts compare1,r24
+	ldd r24,Y+4
+	sts compare2,r24
+	rjmp .L129
+.L105:
+	cpi r18,lo8(50)
+	brne .L106
+	ldi r24,lo8(5)
+	rjmp .L136
+.L106:
+	cpi r18,lo8(51)
+	brne .L107
+	sts rxBuffer,r22
+	ldi r24,lo8(6)
+.L136:
+	sts jobState,r24
+	rjmp .L129
+.L107:
+	cpi r18,lo8(54)
+	brne .L108
+	sbrs r22,5
+	rjmp .L109
+	lds r30,ws2812_ptr
+	cpi r30,lo8(-64)
+	brsh .L109
+	ldd r24,Y+3
+	mov r26,r30
+	ldi r27,0
+	subi r26,lo8(-(ws2812_grb))
+	sbci r27,hi8(-(ws2812_grb))
+	st X,r24
+	ldd r24,Y+4
+	ldi r26,lo8(1)
+	add r26,r30
+	ldi r27,0
+	subi r26,lo8(-(ws2812_grb))
+	sbci r27,hi8(-(ws2812_grb))
+	st X,r24
+	ldi r24,lo8(3)
+	add r24,r30
+	sts ws2812_ptr,r24
+	ldd r24,Y+5
+	subi r30,lo8(-(2))
+	ldi r31,0
+	subi r30,lo8(-(ws2812_grb))
+	sbci r31,hi8(-(ws2812_grb))
+	st Z,r24
+.L109:
+	ldd r24,Y+2
+	sbrs r24,4
+	rjmp .L129
+	lds r24,ws2812_ptr
+	tst r24
+	brne .+2
+	rjmp .L129
+	ldi r24,lo8(17)
+	sts jobState,r24
+	in r24,0x17
+	or r24,r20
+	out 0x17,r24
+	sts ws2812_mask,r20
+	rjmp .L129
+.L108:
+	cpi r18,lo8(55)
+	brne .L111
+	lds r24,EE_addr
+	lds r25,EE_addr+1
+	rcall eeprom_write_byte
+	lds r24,EE_addr
+	lds r25,EE_addr+1
+	ldd r22,Y+3
+	adiw r24,1
+	rcall eeprom_write_byte
+	lds r24,EE_addr
+	lds r25,EE_addr+1
+	ldd r22,Y+4
+	adiw r24,2
+	rcall eeprom_write_byte
+	rjmp .L129
+.L111:
+	cpi r18,lo8(56)
+	brne .L112
+	ldi r24,lo8(20)
+	rjmp .L136
+.L112:
+	cpi r18,lo8(57)
+	brne .L113
+	ldd r25,Y+6
+	sts dwWritePending,r25
+	sts dwRequested,r24
+.L132:
+	ldi r25,lo8(-1)
+	rjmp .L60
+.L113:
+	cpi r18,lo8(58)
+	brne .L114
+	ldi r24,lo8(dwBuf)
+	ldi r25,hi8(dwBuf)
+	sts usbMsgPtr+1,r25
+	sts usbMsgPtr,r24
+	ldd r25,Y+6
+	cpi r25,lo8(-127)
+	brlo .L60
+	ldi r25,lo8(-128)
+	rjmp .L60
+.L114:
+	mov r24,r18
+	andi r24,lo8(-16)
+	cpi r24,lo8(-16)
+	brne .L129
+	ldi r24,lo8(7)
+	sts jobState,r24
+	mov r24,r18
+	andi r24,lo8(8)
+	sts rxBuffer,r24
+	andi r18,lo8(7)
+	sts rxBuffer+1,r18
+	ldi r18,0
+.L116:
+	lds r24,rxBuffer+1
+	cp r18,r24
+	brsh .L129
+	mov r24,r18
+	ldi r25,0
+	adiw r24,2
+	movw r30,r28
+	add r30,r24
+	adc r31,r25
+	ld r19,Z
+	movw r30,r24
+	subi r30,lo8(-(rxBuffer))
+	sbci r31,hi8(-(rxBuffer))
+	st Z,r19
+	subi r18,lo8(-(1))
+	rjmp .L116
+.L129:
+	ldi r25,0
+.L60:
+	mov r24,r25
+/* epilogue start */
+	pop r29
+	pop r28
+	ret
+	.size	usbFunctionSetup, .-usbFunctionSetup
+	.section	.text.usbEventResetReady,"ax",@progbits
+.global	usbEventResetReady
+	.type	usbEventResetReady, @function
+usbEventResetReady:
+	push r13
+	push r14
+	push r15
+	push r16
+	push r17
+	push r28
+	push r29
+/* prologue: function */
+/* frame size = 0 */
+/* stack size = 7 */
+.L__stack_usage = 7
+	ldi r16,lo8(8)
+	ldi r17,0
+	ldi r28,0
+	ldi r29,lo8(-128)
+.L145:
+	mov r13,r29
+	add r13,r28
+	out 0x31,r13
+	rcall usbMeasureFrameLength
+	movw r14,r24
+	ldi r24,52
+	cp r14,r24
+	ldi r24,9
+	cpc r15,r24
+	brge .L144
+	mov r28,r13
+.L144:
+	lsr r29
+	subi r16,1
+	sbc r17,__zero_reg__
+	brne .L145
+	ldi r24,lo8(-1)
+	add r24,r28
+	out 0x31,r24
+	mov r16,r28
+	ldi r17,0
+	subi r16,-1
+	sbci r17,-1
+.L146:
+	in r18,0x31
+	ldi r19,0
+	cp r16,r18
+	cpc r17,r19
+	brlt .L151
+	rcall usbMeasureFrameLength
+	subi r24,52
+	sbci r25,9
+	sbrs r25,7
+	rjmp .L147
+	neg r25
+	neg r24
+	sbc r25,__zero_reg__
+.L147:
+	cp r24,r14
+	cpc r25,r15
+	brge .L148
+	in r28,0x31
+	movw r14,r24
+.L148:
+	in r24,0x31
+	subi r24,lo8(-(1))
+	out 0x31,r24
+	rjmp .L146
+.L151:
+	out 0x31,r28
+	in r22,0x31
+	ldi r24,0
+	ldi r25,0
+/* epilogue start */
+	pop r29
+	pop r28
+	pop r17
+	pop r16
+	pop r15
+	pop r14
+	pop r13
+	rjmp eeprom_write_byte
+	.size	usbEventResetReady, .-usbEventResetReady
+	.section	.text.startup.main,"ax",@progbits
+.global	main
+	.type	main, @function
+main:
+/* prologue: function */
+/* frame size = 0 */
+/* stack size = 0 */
+.L__stack_usage = 0
+	ldi r24,lo8(32)
+	out 0x17,r24
+	out 0x18,r24
+	ldi r24,0
+	ldi r25,0
+	rcall eeprom_read_byte
+	cpi r24,lo8(-1)
+	breq .L153
+	out 0x31,r24
+.L153:
+	lds r16,EE_addr
+	lds r17,EE_addr+1
+	movw r24,r16
+	rcall eeprom_read_byte
+	mov r14,r24
+	movw r24,r16
+	adiw r24,1
+	rcall eeprom_read_byte
+	mov r15,r24
+	movw r24,r16
+	adiw r24,2
+	rcall eeprom_read_byte
+	mov r25,r24
+	ldi r24,lo8(-48)
+	add r24,r14
+	cpi r24,lo8(10)
+	brlo .+2
+	rjmp .L154
+	ldi r24,lo8(-48)
+	add r24,r15
+	cpi r24,lo8(10)
+	brlo .+2
+	rjmp .L154
+	ldi r24,lo8(-48)
+	add r24,r25
+	cpi r24,lo8(10)
+	brlo .+2
+	rjmp .L154
+.L204:
+	lds r16,EE_addr
+	lds r17,EE_addr+1
+	movw r24,r16
+	rcall eeprom_read_byte
+	ldi r25,0
+	sts usbDescriptorStringSerialNumber+2+1,r25
+	sts usbDescriptorStringSerialNumber+2,r24
+	movw r24,r16
+	adiw r24,1
+	rcall eeprom_read_byte
+	ldi r25,0
+	sts usbDescriptorStringSerialNumber+4+1,r25
+	sts usbDescriptorStringSerialNumber+4,r24
+	movw r24,r16
+	adiw r24,2
+	rcall eeprom_read_byte
+	ldi r25,0
+	sts usbDescriptorStringSerialNumber+6+1,r25
+	sts usbDescriptorStringSerialNumber+6,r24
+	sbi 0x17,3
+	ldi r24,lo8(20)
+.L155:
+	ldi r30,lo8(-3662)
+	ldi r31,hi8(-3662)
+1:	sbiw r30,1
+	brne 1b
+	rjmp .
+	nop
+	subi r24,lo8(-(-1))
+	brne .L155
+	cbi 0x17,3
+	sts SPI_DELAY+1,__zero_reg__
+	sts SPI_DELAY,__zero_reg__
+	ldi r25,lo8(14)
+	ldi r24,lo8(24)
+/* #APP */
+ ;  456 "d:\projects\avr\avr8-gnu-toolchain\avr\include\avr\wdt.h" 1
+	in __tmp_reg__,__SREG__
+	cli
+	wdr
+	out 33, r24
+	out __SREG__,__tmp_reg__
+	out 33, r25
+ 	
+ ;  0 "" 2
+/* #NOAPP */
+	sts cmp0,__zero_reg__
+	sts cmp1,__zero_reg__
+	sts cmp2,__zero_reg__
+	sts compare0,__zero_reg__
+	sts compare1,__zero_reg__
+	sts compare2,__zero_reg__
+	sts counter,__zero_reg__
+	sts jobState,__zero_reg__
+	rcall usbInit
+/* #APP */
+ ;  1600 "main.c" 1
+	sei
+ ;  0 "" 2
+/* #NOAPP */
+	cbi 0x17,0
+	cbi 0x18,0
+	cbi 0x17,1
+	cbi 0x18,1
+	cbi 0x17,2
+	cbi 0x18,2
+	cbi 0x17,5
+	cbi 0x18,5
+	ldi r17,lo8(64)
+	ldi r16,lo8(-1)
+	ldi r31,lo8(24)
+	mov r15,r31
+	ldi r26,lo8(2)
+	mov r14,r26
+	clr r10
+	inc r10
+.L203:
+	ldi r22,lo8(27)
+	mov r13,r22
+	ldi r23,lo8(26)
+	mov r12,r23
+	ldi r30,lo8(-128)
+	mov r11,r30
+.L195:
+/* #APP */
+ ;  1613 "main.c" 1
+	wdr
+ ;  0 "" 2
+/* #NOAPP */
+	rcall usbPoll
+	lds r30,jobState
+	mov r24,r30
+	ldi r25,0
+	cpi r24,21
+	cpc r25,__zero_reg__
+	brlo .+2
+	rjmp .L156
+	movw r30,r24
+	subi r30,lo8(-(gs(.L158)))
+	sbci r31,hi8(-(gs(.L158)))
+	ijmp
+	.section	.progmem.gcc_sw_table.main,"ax",@progbits
+	.p2align	1
+.L158:
+	rjmp .L157
+	rjmp .L159
+	rjmp .L160
+	rjmp .L161
+	rjmp .L162
+	rjmp .L163
+	rjmp .L164
+	rjmp .L165
+	rjmp .L156
+	rjmp .L156
+	rjmp .L156
+	rjmp .L156
+	rjmp .L156
+	rjmp .L156
+	rjmp .L156
+	rjmp .L156
+	rjmp .L156
+	rjmp .L166
+	rjmp .L156
+	rjmp .L156
+	rjmp .L167
+	.section	.text.startup.main
+.L159:
+	sbi 0x17,0
+	cbi 0x17,1
+	sbi 0x17,2
+	sbi 0x18,2
+	sts sendBuffer,__zero_reg__
+	lds r24,rxBuffer
+	sts t,r24
+	sts q,r11
+.L168:
+	lds r24,q
+	tst r24
+	brne .+2
+	rjmp .L227
+	cbi 0x18,0
+	ldi r18,0
+.L169:
+	mov r24,r18
+	ldi r25,0
+	lds r20,SPI_DELAY
+	lds r21,SPI_DELAY+1
+	cp r24,r20
+	cpc r25,r21
+	brsh .L229
+	ldi r31,lo8(5)
+1:	dec r31
+	brne 1b
+	rjmp .
+	subi r18,lo8(-(1))
+	rjmp .L169
+.L229:
+	lds r25,q
+	lds r24,t
+	and r24,r25
+	breq .L171
+	sbi 0x18,0
+.L171:
+	cbi 0x18,2
+	lds r24,sendBuffer
+	lsl r24
+	sts sendBuffer,r24
+	in r25,0x16
+	lds r18,sendBuffer
+	bst r25,1
+	clr r24
+	bld r24,0
+	add r24,r18
+	sts sendBuffer,r24
+	ldi r18,0
+.L172:
+	mov r24,r18
+	ldi r25,0
+	lds r20,SPI_DELAY
+	lds r21,SPI_DELAY+1
+	cp r24,r20
+	cpc r25,r21
+	brsh .L230
+	ldi r24,lo8(5)
+1:	dec r24
+	brne 1b
+	rjmp .
+	subi r18,lo8(-(1))
+	rjmp .L172
+.L230:
+	sbi 0x18,2
+	lds r24,q
+	lsr r24
+	sts q,r24
+	rjmp .L168
+.L160:
+	sbi 0x17,2
+	cbi 0x18,2
+	ldi r30,lo8(1979)
+	ldi r31,hi8(1979)
+1:	sbiw r30,1
+	brne 1b
+	rjmp .
+	nop
+	in r24,__SREG__
+/* #APP */
+ ;  50 "d:\projects\avr\avr8-gnu-toolchain\avr\include\util\atomic.h" 1
+	cli
+ ;  0 "" 2
+/* #NOAPP */
+	sbi 0x18,2
+	ldi r30,lo8(288)
+	ldi r31,hi8(288)
+1:	sbiw r30,1
+	brne 1b
+	rjmp .
+	cbi 0x17,2
+	in r25,0x16
+	bst r25,2
+	clr r25
+	bld r25,0
+	mov r28,r25
+	ldi r31,0
+	mov r29,r31
+	movw r18,r28
+	ldi r25,1
+	eor r18,r25
+	sts sendBuffer,r18
+	out __SREG__,r24
+	ldi r30,lo8(1691)
+	ldi r31,hi8(1691)
+1:	sbiw r30,1
+	brne 1b
+	sbi 0x17,2
+	sbi 0x18,2
+	rjmp .L227
+.L161:
+	lds r24,rxBuffer
+	sts q,r24
+	sbi 0x17,2
+	ldi r24,lo8(8)
+.L177:
+	in r18,__SREG__
+/* #APP */
+ ;  50 "d:\projects\avr\avr8-gnu-toolchain\avr\include\util\atomic.h" 1
+	cli
+ ;  0 "" 2
+/* #NOAPP */
+	cbi 0x18,2
+	lds r25,q
+	sbrs r25,0
+	rjmp .L175
+	ldi r31,lo8(33)
+1:	dec r31
+	brne 1b
+	sbi 0x18,2
+	ldi r30,lo8(263)
+	ldi r31,hi8(263)
+1:	sbiw r30,1
+	brne 1b
+	rjmp .
+	nop
+	rjmp .L176
+.L175:
+	ldi r30,lo8(247)
+	ldi r31,hi8(247)
+1:	sbiw r30,1
+	brne 1b
+	nop
+	sbi 0x18,2
+	ldi r31,lo8(55)
+1:	dec r31
+	brne 1b
+.L176:
+	lds r25,q
+	lsr r25
+	sts q,r25
+	out __SREG__,r18
+	subi r24,lo8(-(-1))
+	brne .L177
+	rjmp .L156
+.L162:
+	sts sendBuffer,__zero_reg__
+	ldi r24,lo8(8)
+.L179:
+	lds r25,sendBuffer
+	lsr r25
+	sts sendBuffer,r25
+	sbi 0x17,2
+	in r18,__SREG__
+/* #APP */
+ ;  50 "d:\projects\avr\avr8-gnu-toolchain\avr\include\util\atomic.h" 1
+	cli
+ ;  0 "" 2
+/* #NOAPP */
+	cbi 0x18,2
+	ldi r25,lo8(33)
+1:	dec r25
+	brne 1b
+	sbi 0x18,2
+	ldi r30,lo8(55)
+1:	dec r30
+	brne 1b
+	cbi 0x17,2
+	in r25,0x16
+	bst r25,2
+	clr r25
+	bld r25,0
+	sts q,r25
+	out __SREG__,r18
+	ldi r30,lo8(226)
+	ldi r31,hi8(226)
+1:	sbiw r30,1
+	brne 1b
+	rjmp .
+	nop
+	lds r25,q
+	tst r25
+	breq .L178
+	lds r25,sendBuffer
+	ori r25,lo8(-128)
+	sts sendBuffer,r25
+.L178:
+	subi r24,lo8(-(-1))
+	brne .L179
+	rjmp .L227
+.L163:
+	sbi 0x17,2
+	in r25,__SREG__
+/* #APP */
+ ;  50 "d:\projects\avr\avr8-gnu-toolchain\avr\include\util\atomic.h" 1
+	cli
+ ;  0 "" 2
+/* #NOAPP */
+	cbi 0x18,2
+	ldi r31,lo8(33)
+1:	dec r31
+	brne 1b
+	sbi 0x18,2
+	ldi r24,lo8(55)
+1:	dec r24
+	brne 1b
+	cbi 0x17,2
+	in r24,0x16
+	bst r24,2
+	clr r24
+	bld r24,0
+	sts sendBuffer,r24
+	out __SREG__,r25
+.L227:
+	sts sendBuffer+8,r10
+	rjmp .L156
+.L164:
+	sbi 0x17,2
+	in r24,__SREG__
+/* #APP */
+ ;  50 "d:\projects\avr\avr8-gnu-toolchain\avr\include\util\atomic.h" 1
+	cli
+ ;  0 "" 2
+/* #NOAPP */
+	cbi 0x18,2
+	lds r25,rxBuffer
+	sbrs r25,0
+	rjmp .L180
+	ldi r25,lo8(33)
+1:	dec r25
+	brne 1b
+	sbi 0x18,2
+	ldi r30,lo8(263)
+	ldi r31,hi8(263)
+1:	sbiw r30,1
+	brne 1b
+	rjmp .
+	nop
+	rjmp .L181
+.L180:
+	ldi r30,lo8(247)
+	ldi r31,hi8(247)
+1:	sbiw r30,1
+	brne 1b
+	nop
+	sbi 0x18,2
+	ldi r31,lo8(55)
+1:	dec r31
+	brne 1b
+.L181:
+	out __SREG__,r24
+	rjmp .L228
+.L165:
+	sbi 0x17,1
+	cbi 0x17,0
+	sbi 0x17,2
+	cbi 0x18,2
+	sts t,r13
+	out 0xd,r12
+	lds r24,rxBuffer
+	cpse r24,__zero_reg__
+	cbi 0x18,5
+.L182:
+	sts q,__zero_reg__
+.L183:
+	lds r30,q
+	lds r24,rxBuffer+1
+	cp r30,r24
+	brsh .L231
+	ldi r31,0
+	subi r30,lo8(-(rxBuffer+2))
+	sbci r31,hi8(-(rxBuffer+2))
+	ld r24,Z
+	out 0xf,r24
+	out 0xe,r17
+.L186:
+	lds r24,t
+	out 0xd,r24
+	ldi r18,0
+.L184:
+	mov r24,r18
+	ldi r25,0
+	lds r20,SPI_DELAY
+	lds r21,SPI_DELAY+1
+	cp r24,r20
+	cpc r25,r21
+	brsh .L232
+	ldi r24,lo8(5)
+1:	dec r24
+	brne 1b
+	rjmp .
+	subi r18,lo8(-(1))
+	rjmp .L184
+.L232:
+	sbis 0xe,6
+	rjmp .L186
+	lds r24,q
+	mov r30,r24
+	ldi r31,0
+	in r25,0xf
+	subi r30,lo8(-(sendBuffer))
+	sbci r31,hi8(-(sendBuffer))
+	st Z,r25
+	subi r24,lo8(-(1))
+	sts q,r24
+	rjmp .L183
+.L231:
+	lds r24,rxBuffer
+	cpse r24,__zero_reg__
+	sbi 0x18,5
+.L188:
+	lds r24,q
+	sts sendBuffer+8,r24
+	rjmp .L156
+.L166:
+	ldi r30,lo8(4124)
+	ldi r31,hi8(4124)
+1:	sbiw r30,1
+	brne 1b
+	rjmp .
+	nop
+	in r9,__SREG__
+/* #APP */
+ ;  50 "d:\projects\avr\avr8-gnu-toolchain\avr\include\util\atomic.h" 1
+	cli
+ ;  0 "" 2
+/* #NOAPP */
+	lds r22,ws2812_ptr
+	ldi r23,0
+	lds r20,ws2812_mask
+	ldi r24,lo8(ws2812_grb)
+	ldi r25,hi8(ws2812_grb)
+	rcall ws2812_sendarray_mask
+	sts ws2812_ptr,__zero_reg__
+	out __SREG__,r9
+.L228:
+	rjmp .L156
+.L167:
+	sts dwNWidths,r16
+	sts dwBitTime+1,__zero_reg__
+	sts dwBitTime,__zero_reg__
+	sts dwBuf,__zero_reg__
+	ldi r24,lo8(4124)
+	ldi r25,hi8(4124)
+1:	sbiw r24,1
+	brne 1b
+	rjmp .
+	nop
+	in r9,__SREG__
+/* #APP */
+ ;  50 "d:\projects\avr\avr8-gnu-toolchain\avr\include\util\atomic.h" 1
+	cli
+ ;  0 "" 2
+/* #NOAPP */
+	rcall dwConnect
+	out __SREG__,r9
+	lds r24,dwNWidths
+	cpi r24,lo8(-1)
+	brne .L189
+	sts dwBuf,__zero_reg__
+	rjmp .L190
+.L189:
+	lds r24,dwBitTime
+	lds r25,dwBitTime+1
+	or r24,r25
+	brne .L191
+	sts dwBuf,r10
+	rjmp .L190
+.L191:
+	sts dwBuf,r14
+.L190:
+	lds r24,dwNWidths
+	sts dwBuf+1,r24
+	lds r25,dwCycles
+	lds r24,dwCycles+1
+	lds r19,dwCycles+2
+	lds r18,dwCycles+3
+	sts dwBuf+2,r25
+	sts dwBuf+3,r24
+	sts dwBuf+4,r25
+	sts dwBuf+5,r24
+	sts dwBuf+6,r19
+	sts dwBuf+7,r18
+	lds r24,dwNWidths
+	cpi r24,lo8(25)
+	brlo .L192
+	sts dwNWidths,r15
+.L192:
+	ldi r20,0
+.L193:
+	mov r18,r20
+	ldi r19,0
+	lds r24,dwNWidths
+	ldi r25,0
+	lsl r24
+	rol r25
+	cp r18,r24
+	cpc r19,r25
+	brge .L233
+	movw r30,r18
+	subi r30,lo8(-(dwBuf))
+	sbci r31,hi8(-(dwBuf))
+	movw r26,r18
+	subi r26,lo8(-(dwWidths))
+	sbci r27,hi8(-(dwWidths))
+	ld r24,X
+	std Z+8,r24
+	subi r20,lo8(-(1))
+	rjmp .L193
+.L233:
+	sts jobState,__zero_reg__
+.L156:
+	sts jobState,__zero_reg__
+.L157:
+	lds r24,softPWM
+	tst r24
+	brne .+2
+	rjmp .L195
+	lds r24,counter
+	cpse r24,__zero_reg__
+	rjmp .L196
+	lds r24,compare0
+	sts cmp0,r24
+	lds r24,compare1
+	sts cmp1,r24
+	lds r24,compare2
+	sts cmp2,r24
+	rjmp .L197
+.L196:
+	lds r25,cmp0
+	cp r25,r24
+	brsh .L198
+	cbi 0x18,0
+	rjmp .L199
+.L198:
+	sbi 0x18,0
+.L199:
+	lds r25,counter
+	lds r24,cmp1
+	cp r24,r25
+	brsh .L200
+	cbi 0x18,1
+	rjmp .L201
+.L200:
+	sbi 0x18,1
+.L201:
+	lds r25,counter
+	lds r24,cmp2
+	cp r24,r25
+	brsh .L202
+	cbi 0x18,2
+	rjmp .L197
+.L202:
+	sbi 0x18,2
+.L197:
+	lds r24,counter
+	subi r24,lo8(-(1))
+	sts counter,r24
+	rjmp .L203
+.L154:
+	ldi r22,lo8(53)
+	movw r24,r16
+	rcall eeprom_write_byte
+	lds r24,EE_addr
+	lds r25,EE_addr+1
+	ldi r22,lo8(49)
+	adiw r24,1
+	rcall eeprom_write_byte
+	lds r24,EE_addr
+	lds r25,EE_addr+1
+	ldi r22,lo8(50)
+	adiw r24,2
+	rcall eeprom_write_byte
+	rjmp .L204
+	.size	main, .-main
+	.comm	dwUnread,1,1
+	.comm	dwRequested,1,1
+	.comm	dwWritePending,1,1
+	.comm	dwBuf,128,1
+	.comm	dwBitTime,2,1
+	.comm	dwBitWait,2,1
+	.comm	dwBit0Wait,2,1
+	.comm	dwStartWait,2,1
+	.comm	dwCycles,4,1
+	.section	.bss.dwNWidths,"aw",@nobits
+	.type	dwNWidths, @object
+	.size	dwNWidths, 1
+dwNWidths:
+	.zero	1
+	.section	.bss.dwWidths,"aw",@nobits
+	.type	dwWidths, @object
+	.size	dwWidths, 40
+dwWidths:
+	.zero	40
+	.section	.bss.ws2812_ptr,"aw",@nobits
+	.type	ws2812_ptr, @object
+	.size	ws2812_ptr, 1
+ws2812_ptr:
+	.zero	1
+	.section	.bss.ws2812_mask,"aw",@nobits
+	.type	ws2812_mask, @object
+	.size	ws2812_mask, 1
+ws2812_mask:
+	.zero	1
+	.section	.bss.ws2812_grb,"aw",@nobits
+	.type	ws2812_grb, @object
+	.size	ws2812_grb, 192
+ws2812_grb:
+	.zero	192
+.global	jobState
+	.section	.bss.jobState,"aw",@nobits
+	.type	jobState, @object
+	.size	jobState, 1
+jobState:
+	.zero	1
+	.section	.bss.adcSetting,"aw",@nobits
+	.type	adcSetting, @object
+	.size	adcSetting, 1
+adcSetting:
+	.zero	1
+	.section	.bss.compare2,"aw",@nobits
+	.type	compare2, @object
+	.size	compare2, 1
+compare2:
+	.zero	1
+	.section	.bss.compare1,"aw",@nobits
+	.type	compare1, @object
+	.size	compare1, 1
+compare1:
+	.zero	1
+	.section	.bss.compare0,"aw",@nobits
+	.type	compare0, @object
+	.size	compare0, 1
+compare0:
+	.zero	1
+	.section	.bss.cmp2,"aw",@nobits
+	.type	cmp2, @object
+	.size	cmp2, 1
+cmp2:
+	.zero	1
+	.section	.bss.cmp1,"aw",@nobits
+	.type	cmp1, @object
+	.size	cmp1, 1
+cmp1:
+	.zero	1
+	.section	.bss.cmp0,"aw",@nobits
+	.type	cmp0, @object
+	.size	cmp0, 1
+cmp0:
+	.zero	1
+	.section	.bss.softPWM,"aw",@nobits
+	.type	softPWM, @object
+	.size	softPWM, 1
+softPWM:
+	.zero	1
+	.section	.bss.counter,"aw",@nobits
+	.type	counter, @object
+	.size	counter, 1
+counter:
+	.zero	1
+	.section	.bss.q,"aw",@nobits
+	.type	q, @object
+	.size	q, 1
+q:
+	.zero	1
+	.section	.bss.t,"aw",@nobits
+	.type	t, @object
+	.size	t, 1
+t:
+	.zero	1
+	.comm	rxBuffer,8,1
+	.comm	sendBuffer,9,1
+	.section	.data.SPI_DELAY,"aw",@progbits
+	.type	SPI_DELAY, @object
+	.size	SPI_DELAY, 2
+SPI_DELAY:
+	.word	10
+	.section	.bss.res,"aw",@nobits
+	.type	res, @object
+	.size	res, 4
+res:
+	.zero	4
+	.section	.bss.cmd,"aw",@nobits
+	.type	cmd, @object
+	.size	cmd, 4
+cmd:
+	.zero	4
+	.section	.bss.cmd0,"aw",@nobits
+	.type	cmd0, @object
+	.size	cmd0, 1
+cmd0:
+	.zero	1
+	.section	.bss.timeout,"aw",@nobits
+	.type	timeout, @object
+	.size	timeout, 2
+timeout:
+	.zero	2
+	.section	.bss.address,"aw",@nobits
+	.type	address, @object
+	.size	address, 2
+address:
+	.zero	2
+	.section	.bss.poll2,"aw",@nobits
+	.type	poll2, @object
+	.size	poll2, 1
+poll2:
+	.zero	1
+	.section	.bss.poll1,"aw",@nobits
+	.type	poll1, @object
+	.size	poll1, 1
+poll1:
+	.zero	1
+	.section	.data.sck_period,"aw",@progbits
+	.type	sck_period, @object
+	.size	sck_period, 1
+sck_period:
+	.byte	10
+.global	usbDescriptorStringSerialNumber
+	.section	.data.usbDescriptorStringSerialNumber,"aw",@progbits
+	.type	usbDescriptorStringSerialNumber, @object
+	.size	usbDescriptorStringSerialNumber, 8
+usbDescriptorStringSerialNumber:
+	.word	776
+	.word	53
+	.word	49
+	.word	50
+.global	EE_addr
+	.section	.data.EE_addr,"aw",@progbits
+	.type	EE_addr, @object
+	.size	EE_addr, 2
+EE_addr:
+	.word	32
+.global	LITTLE_WIRE_VERSION
+	.section	.rodata.LITTLE_WIRE_VERSION,"a",@progbits
+	.type	LITTLE_WIRE_VERSION, @object
+	.size	LITTLE_WIRE_VERSION, 1
+LITTLE_WIRE_VERSION:
+	.byte	19
+	.ident	"GCC: (AVR_8_bit_GNU_Toolchain_3.5.4_1709) 4.9.2"
+.global __do_copy_data
+.global __do_clear_bss

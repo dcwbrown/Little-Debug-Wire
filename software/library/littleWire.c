@@ -1,6 +1,6 @@
 /*
   Cross platform computer interface library for Little Wire project
-  
+
   http://littlewire.cc
 
   Copyright (C) <2013> ihsan Kehribar <ihsan@kehribar.me>
@@ -26,7 +26,7 @@
 */
 
 /******************************************************************************
-* See the littleWire.h for the function descriptions/comments 
+* See the littleWire.h for the function descriptions/comments
 /*****************************************************************************/
 #include "littleWire.h"
 
@@ -86,10 +86,10 @@ int littlewire_search()
 
       if((dev->descriptor.idVendor == VENDOR_ID) && (dev->descriptor.idProduct == PRODUCT_ID))
       {
-        udev = usb_open(dev);      
-        if (udev) 
-        {          
-          if (dev->descriptor.iSerialNumber) 
+        udev = usb_open(dev);
+        if (udev)
+        {
+          if (dev->descriptor.iSerialNumber)
           {
             ret = usb_get_string_simple(udev, dev->descriptor.iSerialNumber, string, sizeof(string));
             if (ret > 0)
@@ -113,7 +113,7 @@ int littlewire_search()
 littleWire* littlewire_connect_byID(int desiredID)
 {
   littleWire  *tempHandle = NULL;
-  
+
   if(desiredID > (lw_totalDevices-1))
   {
     return tempHandle;
@@ -218,7 +218,7 @@ void analog_init(littleWire* lwHandle, unsigned char voltageRef)
 
 unsigned int analogRead(littleWire* lwHandle, unsigned char channel)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 15, channel, 0, rxBuffer, 8, USB_TIMEOUT);	
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 15, channel, 0, rxBuffer, 8, USB_TIMEOUT);
 
 	return ((rxBuffer[1] *256) + (rxBuffer[0]));
 }
@@ -312,16 +312,16 @@ void i2c_write(littleWire* lwHandle, unsigned char* sendBuffer, unsigned char le
 void i2c_read(littleWire* lwHandle, unsigned char* readBuffer, unsigned char length, unsigned char endWithStop)
 {
 	int i=0;
-	
+
 	if(endWithStop)
 		lwStatus=usb_control_msg(lwHandle, 0xC0, 46, (length<<8) + 1, 1, rxBuffer, 8, USB_TIMEOUT);
 	else
 		lwStatus=usb_control_msg(lwHandle, 0xC0, 46, (length<<8) + 0, 0, rxBuffer, 8, USB_TIMEOUT);
-	
+
 	delay(3);
 
   lwStatus=usb_control_msg(lwHandle, 0xC0, 40, 0, 0, rxBuffer, 8, USB_TIMEOUT);
-	
+
 	for(i=0;i<length;i++)
 		readBuffer[i]=rxBuffer[i];
 }
@@ -344,7 +344,7 @@ void onewire_writeByte(littleWire* lwHandle, unsigned char messageToSend)
 
 unsigned char onewire_readByte(littleWire* lwHandle)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 43, 0, 0, rxBuffer, 8, USB_TIMEOUT); 
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 43, 0, 0, rxBuffer, 8, USB_TIMEOUT);
 	delay(3);
 	lwStatus=usb_control_msg(lwHandle, 0xC0, 40, 0, 0, rxBuffer, 8, USB_TIMEOUT);
 	return rxBuffer[0];
@@ -354,7 +354,7 @@ unsigned char onewire_readBit(littleWire* lwHandle)
 {
 	lwStatus=usb_control_msg(lwHandle, 0xC0, 50, 0, 0, rxBuffer, 8, USB_TIMEOUT);
 	lwStatus=usb_control_msg(lwHandle, 0xC0, 40, 0, 0, rxBuffer, 8, USB_TIMEOUT);
-	return rxBuffer[0];	
+	return rxBuffer[0];
 }
 
 unsigned char onewire_resetPulse(littleWire* lwHandle)
@@ -362,7 +362,7 @@ unsigned char onewire_resetPulse(littleWire* lwHandle)
 	lwStatus=usb_control_msg(lwHandle, 0xC0, 41, 0, 0, rxBuffer, 8, USB_TIMEOUT);
 	delay(3);
 	lwStatus=usb_control_msg(lwHandle, 0xC0, 40, 0, 0, rxBuffer, 8, USB_TIMEOUT);
-	return rxBuffer[0];	
+	return rxBuffer[0];
 }
 
 void softPWM_state(littleWire* lwHandle,unsigned char state)
@@ -389,7 +389,7 @@ void ws2812_preload(littleWire* lwHandle, unsigned char r,unsigned char g,unsign
 {
 	lwStatus=usb_control_msg(lwHandle, 0xC0, 54, (g<<8) | 0x20, (b<<8) | r, rxBuffer, 8, USB_TIMEOUT);
 }
-	
+
 int customMessage(littleWire* lwHandle,unsigned char* receiveBuffer,unsigned char command,unsigned char d1,unsigned char d2, unsigned char d3, unsigned char d4)
 {
 	int i;
@@ -399,6 +399,144 @@ int customMessage(littleWire* lwHandle,unsigned char* receiveBuffer,unsigned cha
 		receiveBuffer[i]=rxBuffer[i];
 	return rc;
 }
+
+/*------------------------------------------------------------------------------------------------------*/
+
+// dw_connect - returns baud rate if connected, or 0.
+
+int dw_connect(littleWire* lwHandle)
+{
+  uint16_t dwBuf[64];
+  int i;
+
+  // Send 'break and read timings' request to debugWIRE
+  lwStatus = usb_control_msg(
+    lwHandle, USB_TYPE_VENDOR | USB_RECIP_DEVICE | USB_ENDPOINT_OUT,
+    60,    // debugWIRE
+    0,     // value: break and read timings
+    0,     // index
+    0,     // No buffer to send
+    0,     // length: 0
+    USB_TIMEOUT
+  );
+  //  printf("Req 60 OUT:0 lwStatus = %d\n", lwStatus);
+  if (lwStatus < 0) return 0;  // Connection failed.
+
+  delay(100); // While debugWIRE is connecting any USB messages will fail, so give the
+              // connection at least enough time to break for 100ms.
+
+  // Read back timings
+
+  int attemptcount = 0;
+  lwStatus = 0;
+  while ((attemptcount < 10) && (lwStatus <= 0)) {
+    attemptcount++;
+
+    delay(50);
+
+    lwStatus = usb_control_msg(
+      lwHandle, USB_TYPE_VENDOR | USB_RECIP_DEVICE | USB_ENDPOINT_IN,
+      60,    // debugWIRE
+      0,     // value
+      0,     // index
+      (unsigned char*)dwBuf,
+      sizeof(dwBuf),
+      USB_TIMEOUT
+    );
+
+    //  printf("Req 60 IN lwStatus = %d\n", lwStatus);
+    //  if (lwStatus > 0) {
+    //    for (i=0; i<lwStatus/2; i++) printf("  [%d] %04x  %d\n", i, dwBuf[i], dwBuf[i]);
+    //  }
+  }
+
+  if (lwStatus < 18) {return 0;} // Failure - couldn't read any or enough pulse timings.
+
+
+  // Average measurements and determine baud rate as pulse time in device cycles.
+
+  uint32_t measurementCount = lwStatus / 2;
+  uint32_t cyclesPerPulse = 0;
+  for (i=measurementCount-9; i<measurementCount; i++) cyclesPerPulse += dwBuf[i];
+
+  // Pulse cycle time for each measurement is <6*measurement + 8> cyclesPerPulse.
+  cyclesPerPulse = (6*cyclesPerPulse) / 9  +  8;
+
+  // Determine timing loop iteration counts for sending and receiving bytes
+
+  dwBuf[0] = (cyclesPerPulse-8)/4;  // dwBitTime
+
+  //  printf("Setting timing parameters:\n");
+  //  printf("  dwBuf[0]  dwBitTime   %d\n", dwBuf[0]);
+
+  // Send timing parameters to digispark
+
+  lwStatus = usb_control_msg(
+    lwHandle, USB_TYPE_VENDOR | USB_RECIP_DEVICE | USB_ENDPOINT_OUT,
+    60,    // debugWIRE
+    1,     // value: set uart loop counter
+    0,     // index
+    (unsigned char*)dwBuf,
+    2,     // length: 2
+    USB_TIMEOUT
+  );
+  //  printf("Req 60 OUT:1 lwStatus = %d\n", lwStatus);
+
+  if (lwStatus < 2) {return -1;} // Failed to set lopp counter
+
+  return 16500000 / cyclesPerPulse;  // Return baud rate.
+}
+
+
+// dw_transfer - result is < 0 if failure,  length received if successful
+
+int dw_transfer(littleWire* lwHandle, char *out, int outlen, char *in, int inlen) {
+  int i;
+
+  // Send data to be written to debugWIRE
+  lwStatus = usb_control_msg(
+    lwHandle, USB_TYPE_VENDOR | USB_RECIP_DEVICE | USB_ENDPOINT_OUT,
+    60,    // debugWIRE
+    3,     // value: send data and receive bytes
+    0,     // index
+    out,
+    outlen,
+    USB_TIMEOUT
+  );
+  //printf("Req 60 OUT:2 lwStatus = %d\n", lwStatus);
+  if (lwStatus < outlen) {return -1;} // Transfer failed
+
+  int attemptcount = 0;
+  lwStatus = 0;
+  while ((attemptcount < 10) && (lwStatus <= 0)) {
+    attemptcount++;
+    delay(50);
+    lwStatus = usb_control_msg(
+      lwHandle, USB_TYPE_VENDOR | USB_RECIP_DEVICE | USB_ENDPOINT_IN,
+      60,    // debugWIRE
+      0,     // value
+      0,     // index
+      (unsigned char*)in,
+      inlen,
+      USB_TIMEOUT
+    );
+
+    //printf("Req 60 IN lwStatus = %d\n", lwStatus);
+    //if (lwStatus > 0) {
+    //  //for (i=0; i<lwStatus/2; i++) printf("  [%d] %04x  %d\n", i, dwBuf[i], dwBuf[i]);
+    //  for (i=0; i<lwStatus; i++) printf("  [%d] %02x  %d\n", i, dwBuf[i], dwBuf[i]);
+    //}
+
+    return lwStatus;
+  }
+
+  return 0;
+}
+
+/*------------------------------------------------------------------------------------------------------*/
+
+
+
 
 /******************************************************************************
 * Do the crc8 calculation
@@ -441,8 +579,8 @@ int onewire_nextAddress(littleWire* lwHandle)
          return 0;
       }
 
-      // issue the search command 
-      onewire_writeByte(lwHandle,0xF0);  
+      // issue the search command
+      onewire_writeByte(lwHandle,0xF0);
 
       // loop to do the search
       do
@@ -515,7 +653,7 @@ int onewire_nextAddress(littleWire* lwHandle)
          // check for last device
          if (LastDiscrepancy == 0)
             LastDeviceFlag = 1;
-         
+
          search_result = 1;
       }
    }
@@ -565,6 +703,6 @@ char *littleWire_errorName () {
                 case -12: return "Not supported"; break;
                 case -99: return "Other"; break;
                 default: return "unknown";
-        }               
+        }
         else return 0;
 }
