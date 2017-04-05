@@ -30,7 +30,7 @@ spi:
 .L2:
 	lds r23,sck_period
 /* #APP */
- ;  355 "main.c" 1
+ ;  354 "main.c" 1
 	        mov   __tmp_reg__,r23    
 spd29:  rjmp  .                 
         rjmp  .                 
@@ -43,7 +43,7 @@ spd29:  rjmp  .
 	sbi 0x18,2
 	lds r23,sck_period
 /* #APP */
- ;  355 "main.c" 1
+ ;  354 "main.c" 1
 	        mov   __tmp_reg__,r23    
 spd34:  rjmp  .                 
         rjmp  .                 
@@ -126,34 +126,33 @@ _delay_us:
 ;       Want to reach dus10 on a multiple of 16.5 + 12.5 including     
 ;       call time but excluding return time.                           
                                                                        
-;       E.g. cycles taken will be:                                     
-;actual 16,   33, 49,   66, 82                                         
-;ideal  16.5, 33, 49.5, 66, 82.5                                       
+;       E.g. cycles taken inc setup, call and return will be:          
+;actual 16,   33, 49,   66, 82,   99, 115    ...                       
+;ideal  16.5, 33, 49.5, 66, 82.5, 99, 115.5  ...                       
                                                                        
-        nop                   ; 1. 6                                   
-        rjmp  dus8            ; 2. 8  Enter loop allowing for call     
+        rjmp  dus8            ; 2. 7  Enter loop allowing for call     
                               ;       and returnn overhead             
                                                                        
 ;       One microsecond takes 16.5 cycles, so use a loop of alternate  
 ;       16 and 17 cycle delays.                                        
                                                                        
-dus2:   ldi   r18,4           ; 1.                                     
-dus4:   dec   r18             ; 1.                                     
-        brne  dus4            ; 1/2.                                   
-        rjmp  .               ; 2. 25  58                              
-        sbiw  r24,1           ; 2. 27  60                              
-        brcs  dus10           ; If complete reaches dus10 at 29 + n*33  
-                                                                       
-        ldi   r18,4           ; 1.                                     
-dus6:   dec   r18             ; 1.                                     
-        brne  dus6            ; 1/2.                                   
-        rjmp  .               ; 2. 42  75                              
-dus8:   sbiw  r24,1           ; 2. 44  77                              
+                              ;          13  46  79                    
+dus2:   ldi   r18,4           ; +                                      
+dus4:   dec   r18             ;  > 12.                                 
+        brne  dus4            ; +        25  58  91                    
+        sbiw  r24,1           ; 2.       27  60  93                    
+        brcs  dus10           ; If complete reaches dus10 at 29 + n*33 
+                              ;          28  61  94                    
+        ldi   r18,4           ; +                                      
+dus6:   dec   r18             ;  > 12.                                 
+        brne  dus6            ; +        40  73  106                   
+dus8:   rjmp  .               ; 2.    9  42  75  108                   
+        sbiw  r24,1           ; 2.   11  44  77  110                   
         brcc  dus2            ; If more delay required                 
                                                                        
-dus10:                                                                  
+dus10:                        ;      12  45  78  111                   
                                                                        
-;       Return takes 4 cycles                                          
+;       Return takes 4 cycles        16  49  82  115                   
 
  ;  0 "" 2
 /* #NOAPP */
@@ -168,7 +167,7 @@ _delay_ms:
 /* stack size = 0 */
 .L__stack_usage = 0
 /* #APP */
- ;  234 "main.c" 1
+ ;  233 "main.c" 1
 	                                                                       
 ;       Delay 1 to 65536 milliseconds (pass 0 for 65536 milliseconds)  
                                                                        
@@ -382,7 +381,7 @@ ws2812_sendarray_mask:
 	ld r19,Z+
 	movw r24,r30
 /* #APP */
- ;  516 "main.c" 1
+ ;  515 "main.c" 1
 	                                                
          ldi   r21,8     ; 0                     
 loop303:  out   24,r20    ; 1                     
@@ -1549,7 +1548,7 @@ dwCaptureWidths:
 /* stack size = 0 */
 .L__stack_usage = 0
 /* #APP */
- ;  1300 "main.c" 1
+ ;  1299 "main.c" 1
 	                                                                                    
 ;       Measure pulse widths and store in dwBuf                                     
                                                                                     
@@ -1625,7 +1624,7 @@ dwSendBytes:
 /* stack size = 0 */
 .L__stack_usage = 0
 /* #APP */
- ;  1384 "main.c" 1
+ ;  1383 "main.c" 1
 	                                                                    
 ;       Transmit dwLen bytes from dwBuf                             
 ;                                                                   
@@ -1721,7 +1720,7 @@ dwReadBytes:
 /* stack size = 0 */
 .L__stack_usage = 0
 /* #APP */
- ;  1473 "main.c" 1
+ ;  1472 "main.c" 1
 	                                                                    
 ;       Register usage:                                             
 ;                                                                   
@@ -1929,7 +1928,7 @@ main:
 	sts jobState,__zero_reg__
 	rcall usbInit
 /* #APP */
- ;  1615 "main.c" 1
+ ;  1614 "main.c" 1
 	sei
  ;  0 "" 2
 /* #NOAPP */
@@ -1949,7 +1948,7 @@ main:
 	mov r14,r19
 .L281:
 /* #APP */
- ;  1628 "main.c" 1
+ ;  1627 "main.c" 1
 	wdr
  ;  0 "" 2
 /* #NOAPP */
