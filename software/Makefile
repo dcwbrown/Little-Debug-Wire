@@ -15,8 +15,8 @@ else ifeq ($(shell uname), Darwin)
 	EXE_SUFFIX =
 	OSFLAG = -D LINUX
 else
-	USBFLAGS = -I \include
-	USBLIBS = -L \lib -lusb
+	USBFLAGS = -I D:\projects\gcc\libusb-win32-bin-1.2.6.0\include
+	USBLIBS = -L D:\projects\gcc\libusb-win32-bin-1.2.6.0\lib\gcc -lusb
 	EXE_SUFFIX = .exe
 	OSFLAG = -D WIN
 endif
@@ -26,8 +26,9 @@ INCLUDE = library
 CFLAGS  = $(USBFLAGS) $(LIBS) -I$(INCLUDE) -O -g $(OSFLAG)
 
 LWLIBS = littleWire littleWire_util littleWire_servo opendevice
-EXAMPLES  = adc blink blink_ws2812 rgb_cycle_ws2812 fade_ws2812 button servo i2c_blinkM
-EXAMPLES += spi_LTC1448 onewire softPWM hardwarePWM debugConsole lwbuttond i2c_nunchuck
+#EXAMPLES  = adc blink blink_ws2812 rgb_cycle_ws2812 fade_ws2812 button servo i2c_blinkM
+#EXAMPLES += spi_LTC1448 onewire softPWM hardwarePWM debugConsole lwbuttond i2c_nunchuck
+EXAMPLES += debugWIRE
 
 .PHONY:	clean library docs
 
@@ -37,7 +38,7 @@ library: $(LWLIBS)
 
 $(LWLIBS):
 	@echo Building library: $@...
-	$(CC) $(CFLAGS) -c library/$@.c 
+	$(CC) $(CFLAGS) -c library/$@.c
 
 $(EXAMPLES): $(addsuffix .o, $(LWLIBS))
 	@echo Building example: $@...
