@@ -248,7 +248,7 @@ void _delay_ms(uint16_t ms) {  // millisecond parameter is passed in r25:r24
     "        nop                   ; 1. 16496                               \n"
     "        sbiw  r26,1           ; 2. 16498                               \n"
     "        brcc  dms2            ; if more, 16500                         \n"
-  :::"r26", "r27");
+  :::"r18","r26", "r27");
 }
 
 
@@ -995,31 +995,22 @@ uchar usbFunctionSetup(uchar data[8])
 
 
   if (req == 60) { // debugWIRE transfer
-
-    // IN transfer:
-    //   Return content of dwBuf length dwLen
-    //
-    // OUT transfer, request.value:
-    //   0: Send break and record pulse timings in dwBuf
-    //   1: Set software uart timing loop counter
-    //   2: Send data and record pulse timings in dwBuf
-    //   3: Send characters and record response characters in dwBuf
+    if (dwState) {return 0;}   // Prior operation has not yet completed
 
     if (data[0] & 0x80) {
 
       // IN transfer - device to host: return buffered data
-      if (dwState) {return 0;}   // Prior operation has not yet completed
       usbMsgPtr = (uchar*)dwBuf; // Operation complete, result is in dwBuf
       return dwLen;
 
     } else {
 
       // OUT transfer - host to device. rq->wValue specifies action to take.
-      dwState = data[2];         // action required, from low byte of rq->wValue
-      if (dwState == 0) {
-        jobState = 20;           // Send break and record pulse timings in dwBuf
-      } else if (dwState <= 3) { // Actions taking further bytes as parameters
-        dwLen = *((uint16_t*)(data+6));   // rq->wLength
+      dwState = data[2];                // action required, from low byte of rq->wValue
+      dwLen   = *((uint16_t*)(data+6)); // rq->wLength
+      if (dwLen == 0) {
+        jobState = 20; // No out data transfer, go straight to job part
+      } else {
         if (dwLen > sizeof(dwBuf)) dwLen = sizeof(dwBuf);
         dwIn = 0;
         return USB_NO_MSG;     // jobState will be set in usbFunctionDwWrite
@@ -1459,8 +1450,7 @@ void dwSendBytes() {
     "        dec   r23                                                   \n"
     "        brne  dws2            ; While more bytes to transmit        \n"
     "                                                                    \n"
-    "dws12:  sei                   ; Reenable interrupts                 \n"
-    "        cbi   0x17,5          ; DDRB pin5 is input                  \n"
+    "dws12:  cbi   0x17,5          ; DDRB pin5 is input                  \n"
     "                                                                    \n"
   :::"r21","r22","r23","r24","r25","r26","r27","r30","r31");
 }
@@ -1905,39 +1895,39 @@ int main(void) {
 
 
       case 20: // DebugWIRE. dwState determines action:
+        // dwState flag bits:
         //
-        //   0: Send break and record pulse timings in dwBuf
-        //   1: Set uart loop counters
-        //   2: Send data and record pulse timings in dwBuf
-        //   3: Send characters and record response characters in dwBuf
+        //     00000001   0x01     Send break
+        //     00000010   0x02     Set timing parameter
+        //     00000100   0x04     Send bytes
+        //     00001000   0x08     Wait for start bit
+        //     00010000   0x10     Read bytes
+        //     00100000   0x20     Read pulse widths
         //
-        switch(dwState) {
-          case 0:
-            cbi(PORTB, 5); sbi(DDRB, 5); // Take dwire pin low initiating break
-            _delay_ms(100);              // Break for 100ms
-            dwCaptureWidths();
-          break;
+        // Supported combinations
+        //    33 - Send break and read pulse widths
+        //     2 - Set timing parameters
+        //     4 - Send bytes
+        //    20 - Send bytes and read response (normal command)
+        //    28 - Send bytes, wait and read response (e.g. after programming, run to BP)
+        //    36 - Send bytes and receive 0x55 pulse widths
+        //
+        // Note that the wait for start bit loop also monitors the dwState wait for start
+        // bit flag, and is arranged so that sending a 33 (send break and read pulse widths)
+        // will abort a pending wait.
 
-          case 1:
-            ((char*)&dwBitTime)[0] = dwBuf[0];
-            ((char*)&dwBitTime)[1] = dwBuf[1];
-          break;
+        if (dwState & 0x34) {_delay_ms(2);} // Allow USB transfer to complete before
+                                            // any action that may disable interrupts
+        if (dwState & 0x01) {cbi(PORTB, 5); sbi(DDRB, 5); _delay_ms(100);}
+        if (dwState & 0x02) {((char*)&dwBitTime)[0] = dwBuf[0]; ((char*)&dwBitTime)[1] = dwBuf[1];}
+        if (dwState & 0x04) {dwSendBytes();}
+      //if (dwState & 0x08) {dwWaitStart();}
+        if (dwState & 0x10) {dwReadBytes();}
+        if (dwState & 0x20) {dwCaptureWidths();}
 
-          case 2:
-            _delay_ms(2); // Leave time for USB transaction to complete before disabling interrupts
-            dwSendBytes();
-            dwCaptureWidths();
-          break;
-
-          case 3:
-            _delay_ms(2); // Leave time for USB transaction to complete before disabling interrupts
-            dwSendBytes();
-            dwReadBytes();
-          break;
-        }
-
-        dwState  = 0;
+        asm("        sei\n");
         jobState = 0;
+        dwState  = 0;
       break;
 
 

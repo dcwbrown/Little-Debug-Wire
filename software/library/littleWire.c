@@ -27,7 +27,7 @@
 
 /******************************************************************************
 * See the littleWire.h for the function descriptions/comments
-/*****************************************************************************/
+******************************************************************************/
 #include "littleWire.h"
 
 // external variables
@@ -43,8 +43,8 @@ int 	LastFamilyDiscrepancy;
 int 	LastDeviceFlag;
 
 /******************************************************************************
-/ Taken from: http://www.maxim-ic.com/appnotes.cfm/appnote_number/187
-/*****************************************************************************/
+* Taken from: http://www.maxim-ic.com/appnotes.cfm/appnote_number/187
+******************************************************************************/
 static unsigned char dscrc_table[] = {
         0, 94,188,226, 97, 63,221,131,194,156,126, 32,163,253, 31, 65,
       157,195, 33,127,252,162, 64, 30, 95,  1,227,189, 62, 96,130,220,
@@ -80,9 +80,8 @@ int littlewire_search()
     for (dev = bus->devices; dev; dev = dev->next)
     {
       usb_dev_handle *udev;
-      char description[256];
       char string[256];
-      int ret, i;
+      int  ret;
 
       if((dev->descriptor.idVendor == VENDOR_ID) && (dev->descriptor.idProduct == PRODUCT_ID))
       {
@@ -154,7 +153,7 @@ littleWire* littleWire_connect()
 
 unsigned char readFirmwareVersion(littleWire* lwHandle)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 34, 0, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 34, 0, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 
 	return rxBuffer[0];
 }
@@ -174,30 +173,30 @@ void changeSerialNumber(littleWire* lwHandle,int serialNumber)
 
 	sprintf(serBuf,"%d",serialNumber);
 
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 55, (serBuf[1]<<8)|serBuf[0],serBuf[2], rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 55, (serBuf[1]<<8)|serBuf[0],serBuf[2], (char*)rxBuffer, 8, USB_TIMEOUT);
 }
 
 void digitalWrite(littleWire* lwHandle, unsigned char pin, unsigned char state)
 {
 	if(state){
-		lwStatus=usb_control_msg(lwHandle, 0xC0, 18, pin, 0, rxBuffer, 8, USB_TIMEOUT);
+		lwStatus=usb_control_msg(lwHandle, 0xC0, 18, pin, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 	} else{
-		lwStatus=usb_control_msg(lwHandle, 0xC0, 19, pin, 0, rxBuffer, 8, USB_TIMEOUT);
+		lwStatus=usb_control_msg(lwHandle, 0xC0, 19, pin, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 	}
 }
 
 void pinMode(littleWire* lwHandle, unsigned char pin, unsigned char mode)
 {
 	if(mode){
-		lwStatus=usb_control_msg(lwHandle, 0xC0, 13, pin, 0, rxBuffer, 8, USB_TIMEOUT);
+		lwStatus=usb_control_msg(lwHandle, 0xC0, 13, pin, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 	} else {
-		lwStatus=usb_control_msg(lwHandle, 0xC0, 14, pin, 0, rxBuffer, 8, USB_TIMEOUT);
+		lwStatus=usb_control_msg(lwHandle, 0xC0, 14, pin, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 	}
 }
 
 unsigned char digitalRead(littleWire* lwHandle, unsigned char pin)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 20, pin, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 20, pin, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 
 	return rxBuffer[0];
 }
@@ -205,37 +204,37 @@ unsigned char digitalRead(littleWire* lwHandle, unsigned char pin)
 void internalPullup(littleWire* lwHandle, unsigned char pin, unsigned char state)
 {
 	if(state){
-		lwStatus=usb_control_msg(lwHandle, 0xC0, 18, pin, 0, rxBuffer, 8, USB_TIMEOUT);
+		lwStatus=usb_control_msg(lwHandle, 0xC0, 18, pin, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 	} else{
-		lwStatus=usb_control_msg(lwHandle, 0xC0, 19, pin, 0, rxBuffer, 8, USB_TIMEOUT);
+		lwStatus=usb_control_msg(lwHandle, 0xC0, 19, pin, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 	}
 }
 
 void analog_init(littleWire* lwHandle, unsigned char voltageRef)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 35, (voltageRef<<8) | 0x07, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 35, (voltageRef<<8) | 0x07, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 }
 
 unsigned int analogRead(littleWire* lwHandle, unsigned char channel)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 15, channel, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 15, channel, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 
 	return ((rxBuffer[1] *256) + (rxBuffer[0]));
 }
 
 void pwm_init(littleWire* lwHandle)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 16, 0, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 16, 0, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 }
 
 void pwm_stop(littleWire* lwHandle)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 32, 0, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 32, 0, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 }
 
 void pwm_updateCompare(littleWire* lwHandle, unsigned char channelA, unsigned char channelB)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 17, channelA, channelB, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 17, channelA, channelB, (char*)rxBuffer, 8, USB_TIMEOUT);
 }
 
 void pwm_updatePrescaler(littleWire* lwHandle, unsigned int value)
@@ -243,26 +242,26 @@ void pwm_updatePrescaler(littleWire* lwHandle, unsigned int value)
 	switch(value)
 	{
 		case 1024:
-			lwStatus=usb_control_msg(lwHandle, 0xC0, 22, 4, 0, rxBuffer, 8, USB_TIMEOUT);
+			lwStatus=usb_control_msg(lwHandle, 0xC0, 22, 4, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 		break;
 		case 256:
-			lwStatus=usb_control_msg(lwHandle, 0xC0, 22, 3, 0, rxBuffer, 8, USB_TIMEOUT);
+			lwStatus=usb_control_msg(lwHandle, 0xC0, 22, 3, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 		break;
 		case 64:
-			lwStatus=usb_control_msg(lwHandle, 0xC0, 22, 2, 0, rxBuffer, 8, USB_TIMEOUT);
+			lwStatus=usb_control_msg(lwHandle, 0xC0, 22, 2, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 		break;
 		case 8:
-			lwStatus=usb_control_msg(lwHandle, 0xC0, 22, 1, 0, rxBuffer, 8, USB_TIMEOUT);
+			lwStatus=usb_control_msg(lwHandle, 0xC0, 22, 1, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 		break;
 		case 1:
-			lwStatus=usb_control_msg(lwHandle, 0xC0, 22, 0, 0, rxBuffer, 8, USB_TIMEOUT);
+			lwStatus=usb_control_msg(lwHandle, 0xC0, 22, 0, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 		break;
 	}
 }
 
 void spi_init(littleWire* lwHandle)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 23, 0, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 23, 0, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 }
 
 void spi_sendMessage(littleWire* lwHandle, unsigned char * sendBuffer, unsigned char * inputBuffer, unsigned char length ,unsigned char mode)
@@ -270,27 +269,27 @@ void spi_sendMessage(littleWire* lwHandle, unsigned char * sendBuffer, unsigned 
 	int i=0;
 	if(length>4)
 		length=4;
-	lwStatus=usb_control_msg(lwHandle, 0xC0, (0xF0 + length + (mode<<3) ), (sendBuffer[1]<<8) + sendBuffer[0] , (sendBuffer[3]<<8) + sendBuffer[2], rxBuffer, 8, USB_TIMEOUT);
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 40, 0, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, (0xF0 + length + (mode<<3) ), (sendBuffer[1]<<8) + sendBuffer[0] , (sendBuffer[3]<<8) + sendBuffer[2], (char*)rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 40, 0, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 	for(i=0;i<length;i++)
 		inputBuffer[i]=rxBuffer[i];
 }
 
 unsigned char debugSpi(littleWire* lwHandle, unsigned char message)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 33, 0, 0, rxBuffer, 8, USB_TIMEOUT);
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 40, 0, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 33, 0, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 40, 0, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 	return rxBuffer[0];
 }
 
 void spi_updateDelay(littleWire* lwHandle, unsigned int duration)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 31, duration, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 31, duration, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 }
 
 void i2c_init(littleWire* lwHandle)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 44, 0, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 44, 0, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 }
 
 unsigned char i2c_start(littleWire* lwHandle, unsigned char address7bit, unsigned char direction)
@@ -299,14 +298,14 @@ unsigned char i2c_start(littleWire* lwHandle, unsigned char address7bit, unsigne
 
 	temp = (address7bit << 1) | direction;
 
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 45, temp, 0, rxBuffer, 8, USB_TIMEOUT);
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 40, 0, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 45, temp, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 40, 0, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 	return !rxBuffer[0];
 }
 
 void i2c_write(littleWire* lwHandle, unsigned char* sendBuffer, unsigned char length, unsigned char endWithStop)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, (0xE0 + length + (endWithStop<<3) ), (sendBuffer[1]<<8) + sendBuffer[0] , (sendBuffer[3]<<8) + sendBuffer[2], rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, (0xE0 + length + (endWithStop<<3) ), (sendBuffer[1]<<8) + sendBuffer[0] , (sendBuffer[3]<<8) + sendBuffer[2], (char*)rxBuffer, 8, USB_TIMEOUT);
 }
 
 void i2c_read(littleWire* lwHandle, unsigned char* readBuffer, unsigned char length, unsigned char endWithStop)
@@ -314,13 +313,13 @@ void i2c_read(littleWire* lwHandle, unsigned char* readBuffer, unsigned char len
 	int i=0;
 
 	if(endWithStop)
-		lwStatus=usb_control_msg(lwHandle, 0xC0, 46, (length<<8) + 1, 1, rxBuffer, 8, USB_TIMEOUT);
+		lwStatus=usb_control_msg(lwHandle, 0xC0, 46, (length<<8) + 1, 1, (char*)rxBuffer, 8, USB_TIMEOUT);
 	else
-		lwStatus=usb_control_msg(lwHandle, 0xC0, 46, (length<<8) + 0, 0, rxBuffer, 8, USB_TIMEOUT);
+		lwStatus=usb_control_msg(lwHandle, 0xC0, 46, (length<<8) + 0, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 
 	delay(3);
 
-  lwStatus=usb_control_msg(lwHandle, 0xC0, 40, 0, 0, rxBuffer, 8, USB_TIMEOUT);
+  lwStatus=usb_control_msg(lwHandle, 0xC0, 40, 0, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 
 	for(i=0;i<length;i++)
 		readBuffer[i]=rxBuffer[i];
@@ -328,209 +327,76 @@ void i2c_read(littleWire* lwHandle, unsigned char* readBuffer, unsigned char len
 
 void i2c_updateDelay(littleWire* lwHandle, unsigned int duration)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 49, duration, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 49, duration, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 }
 
 void onewire_sendBit(littleWire* lwHandle, unsigned char bitValue)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 51, bitValue, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 51, bitValue, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 }
 
 void onewire_writeByte(littleWire* lwHandle, unsigned char messageToSend)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 42, messageToSend, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 42, messageToSend, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 	delay(3);
 }
 
 unsigned char onewire_readByte(littleWire* lwHandle)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 43, 0, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 43, 0, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 	delay(3);
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 40, 0, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 40, 0, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 	return rxBuffer[0];
 }
 
 unsigned char onewire_readBit(littleWire* lwHandle)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 50, 0, 0, rxBuffer, 8, USB_TIMEOUT);
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 40, 0, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 50, 0, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 40, 0, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 	return rxBuffer[0];
 }
 
 unsigned char onewire_resetPulse(littleWire* lwHandle)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 41, 0, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 41, 0, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 	delay(3);
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 40, 0, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 40, 0, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 	return rxBuffer[0];
 }
 
 void softPWM_state(littleWire* lwHandle,unsigned char state)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 47, state, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 47, state, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 }
 
 void softPWM_write(littleWire* lwHandle,unsigned char ch1,unsigned char ch2,unsigned char ch3)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 48, (ch2<<8) | ch1, ch3, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 48, (ch2<<8) | ch1, ch3, (char*)rxBuffer, 8, USB_TIMEOUT);
 }
 
 void ws2812_write(littleWire* lwHandle, unsigned char pin, unsigned char r,unsigned char g,unsigned char b)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 54, (g<<8) | pin | 0x30, (b<<8) | r, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 54, (g<<8) | pin | 0x30, (b<<8) | r, (char*)rxBuffer, 8, USB_TIMEOUT);
 }
 
 void ws2812_flush(littleWire* lwHandle, unsigned char pin)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 54, pin | 0x10, 0, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 54, pin | 0x10, 0, (char*)rxBuffer, 8, USB_TIMEOUT);
 }
 
 void ws2812_preload(littleWire* lwHandle, unsigned char r,unsigned char g,unsigned char b)
 {
-	lwStatus=usb_control_msg(lwHandle, 0xC0, 54, (g<<8) | 0x20, (b<<8) | r, rxBuffer, 8, USB_TIMEOUT);
+	lwStatus=usb_control_msg(lwHandle, 0xC0, 54, (g<<8) | 0x20, (b<<8) | r, (char*)rxBuffer, 8, USB_TIMEOUT);
 }
 
 int customMessage(littleWire* lwHandle,unsigned char* receiveBuffer,unsigned char command,unsigned char d1,unsigned char d2, unsigned char d3, unsigned char d4)
 {
 	int i;
 	int rc;
-	rc = lwStatus=usb_control_msg(lwHandle, 0xC0, command, (d2<<8)|d1, (d4<<8)|d3, rxBuffer, 8, USB_TIMEOUT);
+	rc = lwStatus=usb_control_msg(lwHandle, 0xC0, command, (d2<<8)|d1, (d4<<8)|d3, (char*)rxBuffer, 8, USB_TIMEOUT);
 	for(i=0;i<8;i++)
 		receiveBuffer[i]=rxBuffer[i];
 	return rc;
-}
-
-/*------------------------------------------------------------------------------------------------------*/
-
-// dw_connect - returns baud rate if connected, or 0.
-
-int dw_connect(littleWire* lwHandle)
-{
-  uint16_t dwBuf[64];
-  int i;
-
-  // Send 'break and read timings' request to debugWIRE
-  lwStatus = usb_control_msg(
-    lwHandle, USB_TYPE_VENDOR | USB_RECIP_DEVICE | USB_ENDPOINT_OUT,
-    60,    // debugWIRE
-    0,     // value: break and read timings
-    0,     // index
-    0,     // No buffer to send
-    0,     // length: 0
-    USB_TIMEOUT
-  );
-  //  printf("Req 60 OUT:0 lwStatus = %d\n", lwStatus);
-  if (lwStatus < 0) return 0;  // Connection failed.
-
-  delay(100); // While debugWIRE is connecting any USB messages will fail, so give the
-              // connection at least enough time to break for 100ms.
-
-  // Read back timings
-
-  int attemptcount = 0;
-  lwStatus = 0;
-  while ((attemptcount < 10) && (lwStatus <= 0)) {
-    attemptcount++;
-
-    delay(50);
-
-    lwStatus = usb_control_msg(
-      lwHandle, USB_TYPE_VENDOR | USB_RECIP_DEVICE | USB_ENDPOINT_IN,
-      60,    // debugWIRE
-      0,     // value
-      0,     // index
-      (unsigned char*)dwBuf,
-      sizeof(dwBuf),
-      USB_TIMEOUT
-    );
-
-    //  printf("Req 60 IN lwStatus = %d\n", lwStatus);
-    //  if (lwStatus > 0) {
-    //    for (i=0; i<lwStatus/2; i++) printf("  [%d] %04x  %d\n", i, dwBuf[i], dwBuf[i]);
-    //  }
-  }
-
-  if (lwStatus < 18) {return 0;} // Failure - couldn't read any or enough pulse timings.
-
-
-  // Average measurements and determine baud rate as pulse time in device cycles.
-
-  uint32_t measurementCount = lwStatus / 2;
-  uint32_t cyclesPerPulse = 0;
-  for (i=measurementCount-9; i<measurementCount; i++) cyclesPerPulse += dwBuf[i];
-
-  // Pulse cycle time for each measurement is <6*measurement + 8> cyclesPerPulse.
-  cyclesPerPulse = (6*cyclesPerPulse) / 9  +  8;
-
-  // Determine timing loop iteration counts for sending and receiving bytes
-
-  dwBuf[0] = (cyclesPerPulse-8)/4;  // dwBitTime
-
-  //  printf("Setting timing parameters:\n");
-  //  printf("  dwBuf[0]  dwBitTime   %d\n", dwBuf[0]);
-
-  // Send timing parameters to digispark
-
-  lwStatus = usb_control_msg(
-    lwHandle, USB_TYPE_VENDOR | USB_RECIP_DEVICE | USB_ENDPOINT_OUT,
-    60,    // debugWIRE
-    1,     // value: set uart loop counter
-    0,     // index
-    (unsigned char*)dwBuf,
-    2,     // length: 2
-    USB_TIMEOUT
-  );
-  //  printf("Req 60 OUT:1 lwStatus = %d\n", lwStatus);
-
-  if (lwStatus < 2) {return -1;} // Failed to set lopp counter
-
-  return 16500000 / cyclesPerPulse;  // Return baud rate.
-}
-
-
-// dw_transfer - result is < 0 if failure,  length received if successful
-
-int dw_transfer(littleWire* lwHandle, char *out, int outlen, char *in, int inlen) {
-  int i;
-
-  // Send data to be written to debugWIRE
-  lwStatus = usb_control_msg(
-    lwHandle, USB_TYPE_VENDOR | USB_RECIP_DEVICE | USB_ENDPOINT_OUT,
-    60,    // debugWIRE
-    3,     // value: send data and receive bytes
-    0,     // index
-    out,
-    outlen,
-    USB_TIMEOUT
-  );
-  //printf("Req 60 OUT:2 lwStatus = %d\n", lwStatus);
-  if (lwStatus < outlen) {return -1;} // Transfer failed
-
-  int attemptcount = 0;
-  lwStatus = 0;
-  while ((attemptcount < 10) && (lwStatus <= 0)) {
-    attemptcount++;
-    delay(50);
-    lwStatus = usb_control_msg(
-      lwHandle, USB_TYPE_VENDOR | USB_RECIP_DEVICE | USB_ENDPOINT_IN,
-      60,    // debugWIRE
-      0,     // value
-      0,     // index
-      (unsigned char*)in,
-      inlen,
-      USB_TIMEOUT
-    );
-
-    //printf("Req 60 IN lwStatus = %d\n", lwStatus);
-    //if (lwStatus > 0) {
-    //  //for (i=0; i<lwStatus/2; i++) printf("  [%d] %04x  %d\n", i, dwBuf[i], dwBuf[i]);
-    //  for (i=0; i<lwStatus; i++) printf("  [%d] %02x  %d\n", i, dwBuf[i], dwBuf[i]);
-    //}
-
-    return lwStatus;
-  }
-
-  return 0;
 }
 
 /*------------------------------------------------------------------------------------------------------*/
@@ -541,7 +407,7 @@ int dw_transfer(littleWire* lwHandle, char *out, int outlen, char *in, int inlen
 /******************************************************************************
 * Do the crc8 calculation
 * Taken from: http://www.maxim-ic.com/appnotes.cfm/appnote_number/187
-/*****************************************************************************/
+******************************************************************************/
 unsigned char docrc8(unsigned char value)
 {
    // See Maxim Application Note 27
