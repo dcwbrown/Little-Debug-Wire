@@ -1,4 +1,4 @@
-/// DumpCommand.c
+/// DataMemory.c
 
 
 
@@ -46,31 +46,29 @@ void DumpDataWordsCommand() {
 
 
 
-void DumpFlashBytesCommand() {
-  int length = 128; // Default byte count to display
-  ParseDumpParameters("dump flash bytes", FlashSize(), &FBaddr, &length);
+void ParseWriteParameters(char *context, int *addr, int limit, u8 *buf, int *len) {
+  Sb(); if (!IsDwDebugNumeric(NextCh())) {Ws("Missing address parameter on "); Ws(context); Fail(" command.");}
+  *addr = ReadNumber(1);
 
-  u8 buf[length];
-  DwReadFlash(FBaddr, length, buf);
+  *len = 0;
+  Sb();
+  while (IsDwDebugNumeric(NextCh())  &&  (*len < 16)) {
+    int byte = ReadNumber(1);
+    if (byte < 0  ||  byte > 255) {Ws("Invalid byte value on "); Ws(context); Fail(" command.");}
+    buf[(*len)++] =byte;
+    Sb();
+  }
 
-  DumpBytes(FBaddr, length, buf);
-  FBaddr += length;
+  if (!DwEoln()) {Ws("Unrecognised parameters on "); Ws(context); Fail(" command.");}
+
+  if (*len < 1) {Ws("Missing data bytes on "); Ws(context); Fail(" command.");}
+  if (*addr + *len > limit) {Ws("Requested write address beyond range available for "); Ws(context); Fail(" command.");}
 }
 
 
 
 
-void DumpFlashWordsCommand() {
-  int length = 128; // Default byte count to display
-  ParseDumpParameters("dump flash words", FlashSize(), &FWaddr, &length);
-
-  u8 buf[length];
-  DwReadFlash(FWaddr, length, buf);
-
-  DumpWords(FWaddr, length, buf);
-  FWaddr += length;
+void WriteDataBytesCommand() {
+  Fail("Write data command not yet implemented.");
 }
-
-
-
 

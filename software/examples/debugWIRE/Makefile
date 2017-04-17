@@ -62,7 +62,7 @@ ifndef TOOLCHAIN_DIR
 all: run
 
 run: $(BINARY)
-	./$(BINARY) f0,q
+	./$(BINARY) f0,qs
 endif
 
 $(BINARY): */*/*.c */*.c Makefile

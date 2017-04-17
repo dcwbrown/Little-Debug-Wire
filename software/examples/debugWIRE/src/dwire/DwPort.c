@@ -177,15 +177,6 @@ int DwTransferReadWord(u8 *out, int outlen) {
 
 
 
-void CheckDevice() {if (DeviceType<0) {Fail("Device not recognised.");}}
-int  IoregSize()   {CheckDevice(); return Characteristics[DeviceType].ioregSize;}
-int  SramSize()    {CheckDevice(); return Characteristics[DeviceType].sramSize;}
-int  EepromSize()  {CheckDevice(); return Characteristics[DeviceType].eepromSize;}
-int  FlashSize()   {CheckDevice(); return Characteristics[DeviceType].flashSize;}   // In bytes
-int  PageSize()    {CheckDevice(); return Characteristics[DeviceType].pageSize;}    // In bytes
-int  DWDRreg()     {CheckDevice(); return Characteristics[DeviceType].DWDR;}
-int  DWDRaddr()    {CheckDevice(); return Characteristics[DeviceType].DWDR + 0x20;} // IO regs come after the 32 regs r0-r31
-int  DataLimit()   {CheckDevice(); return 32 + IoregSize() + SramSize();}
 
 void SetSizes(int signature) {
   int i=0; while (Characteristics[i].signature  &&  Characteristics[i].signature != signature) {i++;}
@@ -294,24 +285,6 @@ void DwWriteAddr(int addr, int len, const u8 *buf) {
   if (len > 0) {DwUnsafeWriteAddr(addr, len, buf);}
 }
 
-
-void DwReadFlash(int addr, int len, u8 *buf) {
-  int limit = addr + len;
-  if (limit > FlashSize()) {Fail("Attempt to read beyond end of flash.");}
-  while (addr < limit) {
-    int length = min(limit-addr, 128); // Read no more than 128 bytes at a time.
-    //Ws("ReadFlashBlock at $"); Wx(addr,1); Ws(", length $"); Wx(length,1); Wl();
-    DwTransfer(ByteArrayLiteral(
-      0x66, 0xD0, 0,0x1e, 0xD1, 0,0x20,           // Set PC=0x001E, BP=0x0020 (i.e. address register Z)
-      0xC2, 5, 0x20, lo(addr),hi(addr),           // Write addr to Z
-      0xD0, 0,0, 0xD1, hi(2*length),lo(2*length), // Set PC=0, BP=2*len
-      0xC2, 2, 0x20),                             // Read length bytes from flash starting at first
-      buf, length
-    );
-    addr += length;
-    buf  += length;
-  }
-}
 
 
 void DwReconnect() {
@@ -452,33 +425,41 @@ out SWDR,r?      or    ?unused
 
 
 
-40/60   0   0   0   0   0   GO                         Set GO context  (No bp?)
-41/61   0   0   0   0   1   Run to cursor              Set run to cursor context (Run to hardware BP?)
-43/63   0   0   0   1   1   Step out                   Set step out context (Run to return instruction?)
-44/64   0   0   1   0   0   Write flash page           Set up for single step using loaded instruction
-46/66   0   0   1   1   0   Use virtual instructions   Set up for read/write using repeating simulated instructions
-59/79   1   1   0   0   1   Step in/autostep           Set step-in / autostep context or when resuming a sw bp (Execute a single instruction?)
-5A/7A   1   1   0   1   0   Single step                Set single step context
-        ^   ^   ^   ^   ^
-        |   |   |   '---'------ 00 no break, 01 Break at BP, 10 ?, 11 ? break at return?
-        |   |   '-------------- PC represents Flash (0) or virtual space (1)
-        '---'------------------
+40/60   0 1  x  0 0  0  0 0   GO                         Set GO context  (No bp?)
+41/61   0 1  x  0 0  0  0 1   Run to cursor              Set run to cursor context (Run to hardware BP?)
+43/63   0 1  x  0 0  0  1 1   Step out                   Set step out context (Run to return instruction?)
+44/64   0 1  x  0 0  1  0 0   Write flash page           Set up for single step using loaded instruction
+46/66   0 1  x  0 0  1  1 0   Use virtual instructions   Set up for read/write using repeating simulated instructions
+59/79   0 1  x  1 1  0  0 1   Step in/autostep           Set step-in / autostep context or when resuming a sw bp (Execute a single instruction?)
+5A/7A   0 1  x  1 1  0  1 0   Single step                Set single step context
+             |  | |  |  | |
+             |  | |  |  '-'------ 00 no break
+             |  | |  |  '-'------ 01 break when PC = BP, or single step resuming a sw bp
+             |  | |  |  '-'------ 10 Used for executing from virtual space OR single step
+             |  | |  |  '-'------ 11 break at return?
+             |  | |  '----------- Instructions will load from flash (0) or virtual space (1)
+             |  '-'-------------- 00 Not single step
+             |  '-'-------------- 01 ?
+             |  '-'-------------- 10 ?
+             |  '-'-------------- 11 Single step or maybe, use IR instead of (PC) for first instruction
+             '------------------- Run with timers disabled
 
 
-
-
-20      0 0 0   go start reading/writing SRAM/Flash based on low byte of PC
-21      0 0 1   single step read/write a single register
-23      0 1 1   single step an instruction loaded with D2
-30      1 0 0   go normal execution
-31      1 0 1   single step (Rikusw says PC increments twice?)
-32      1 1 0   go using loaded instruction
-33      1 1 1   single step using slow loaded instruction (specifically spm)
-                      will generate break and 0x55 output when complete.
-        ^ ^ ^
-        | | '---- Single step - stop after 1 instruction
-        | '------ Execute (at least initially) instruction loaded with D2.
-        '-------- Use Flash (1) or virtual memory selected by C2 (0)
+20      0 0 1 0 0 0 0 0    go start reading/writing reg/SRAM/Flash based on IR and low byte of PC
+21      0 0 1 0 0 0 0 1    single step read/write a single register
+22      0 0 1 0 0 0 1 0    MAYBE go starting with instruction in IR followed by virtual instrucion?
+23      0 0 1 0 0 0 1 1    single step an instruction in IR (loaded with D2)
+30      0 0 1 1 0 0 0 0    go normal execution
+31      0 0 1 1 0 0 0 1    single step (Rikusw says PC increments twice?)
+32      0 0 1 1 0 0 1 0    go using loaded instruction
+33      0 0 1 1 0 0 1 1    single step using slow loaded instruction (specifically spm)
+              |     | |    will generate break and 0x55 output when complete.
+              |     | |
+              |     | '--- Single step - stop after 1 instruction
+              |-----'----- 00 Execute from virtual space
+              |-----'----- 01 Execute from loaded IR
+              |-----'----- 10 Execute from flash
+              |-----'----- 11 Execute from loaded IR and generate break on completion (specifically fro SPM)
 
 
 Resume execution:              60/61/79/7A 30
@@ -537,5 +518,33 @@ D2 E1 C1 23 ldi r28,0x11
 D2 BF C7 23 out SPMCSR,r28 = 11 = RWWSRE
 D2 95 E8 33 spm
 <00 55> 83 <55>
+
+Reading Eeprom
+
+66 D0 00 1C D1 00 20 C2 05 20 --01 01 00 00-- --Set YZ--
+64 D2 BD F2 23 D2 BD E1 23 D2 BB CF 23 D2 B4 00 23 D2 BE 01 23 xx
+
+66 D0 00 1C D1 00 20 C2 05 20 --01 01 00 00-- --Set YZ--
+64
+D2 BD F2 23 out EEARH,r31
+D2 BD E1 23 out EEARL,r30
+D2 BB CF 23 out EECR,r28 = 01 = EERE
+D2 B4 00 23 in r0,EEDR
+D2 BE 01 23 out DWDR,r0
+xx -- Byte from target
+
+
+Writing Eeprom
+
+66 D0 00 1A D1 00 20 C2 05 20 --04 02 01 01 10 00-- --Set XYZ--
+64 D2 BD F2 23 D2 BD E1 23 D2 B6 01 23 xx D2 BC 00 23 D2 BB AF 23 D2 BB BF 23
+
+64
+D2 BD F2 23 out EEARH,r31 = 00
+D2 BD E1 23 out EEARL,r30 = 10
+D2 B6 01 23 xx in r0,DWDR = xx - byte to target
+D2 BC 00 23 out EEDR,r0
+D2 BB AF 23 out EECR,r26 = 04 = EEMWE
+D2 BB BF 23 out EECR,r27 = 02 = EEWE
 
 */
