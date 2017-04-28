@@ -174,9 +174,10 @@ static uint8_t ws2812_ptr=0;
 // ----------------------------------------------------------------------
 // debugWIRE support
 volatile uint8_t dwBuf[128];
-volatile uint8_t dwLen;       // Length being received from host or avr device
-volatile uint8_t dwIn;        // Input pointer: where usbDwFunctionWrite writes into dwBuf
-volatile uint8_t dwState;     // Current debugWIRE action underway, 0 if none
+volatile uint8_t dwLen;        // Length being received from host or avr device
+volatile uint8_t dwIn;         // Input pointer: where usbDwFunctionWrite writes into dwBuf
+volatile uint8_t dwState;      // Current debugWIRE action underway, 0 if none
+uchar            dwPinChanged; // Flags activity on dWIRE line when device running
 // ----------------------------------------------------------------------
 
 
@@ -1398,7 +1399,7 @@ void dwSendBytes() {
     "                                                                    \n"
     "        lds   r23,dwLen                                             \n"
     "        tst   r23                                                   \n"
-    "        breq  dws12           ; If no bytes to transmit             \n"
+    "        breq  dws14           ; If no bytes to transmit             \n"
     "                                                                    \n"
     ";       Disable interrupts during transmission                      \n"
     "                                                                    \n"
@@ -1448,9 +1449,19 @@ void dwSendBytes() {
     "        brne  dws10           ; 1/2. While more waiting required    \n"
     "                                                                    \n"
     "        dec   r23                                                   \n"
-    "        brne  dws2            ; While more bytes to transmit        \n"
+    "        breq  dws14           ; If no more bytes to transmit        \n"
     "                                                                    \n"
-    "dws12:  cbi   0x17,5          ; DDRB pin5 is input                  \n"
+    ";       Hold line at mark (idle) for one more bit time to allow     \n"
+    ";       device to digest any command.                               \n"
+    "                                                                    \n"
+    "        movw  r30,r24                                               \n"
+    "                                                                    \n"
+    "dws12:  sbiw  r30,1           ; 2.   Decrement wait count           \n"
+    "        brne  dws12           ; 1/2. While more waiting required    \n"
+    "                                                                    \n"
+    "        rjmp  dws2            ; Loop back to send next byte         \n"
+    "                                                                    \n"
+    "dws14:  cbi   0x17,5          ; DDRB pin5 is input                  \n"
     "                                                                    \n"
   :::"r21","r22","r23","r24","r25","r26","r27","r30","r31");
 }
@@ -1478,12 +1489,11 @@ void dwReadBytes() {
     "        ldi   r26,lo8(dwBuf)  ; X register addresses dwBuf          \n"
     "        ldi   r27,hi8(dwBuf)                                        \n"
     "                                                                    \n"
-    ";       Disable interrupts during reception                         \n"
+    ";       Assumes previous dwSendBytes call has left:                 \n"
+    ";         Interrupts already disabled                               \n"
+    ";         DDRB pin5 is input                                        \n"
     "                                                                    \n"
-    "        cli                                                         \n"
-    "        cbi   0x17,5          ; DDRB pin5 is input                  \n"
-    "                                                                    \n"
-    ";       Wait up to 65536*6 cycles = 23ms for start bit              \n"
+    ";       Wait up to 65536*6 cycles = 23.8ms for start bit            \n"
     "                                                                    \n"
     "dwr2:   clr   r30                                                   \n"
     "        clr   r31                                                   \n"
@@ -1538,7 +1548,7 @@ void dwReadBytes() {
     "        st    x+,r22                                                \n"
     "        inc   r23                                                   \n"
     "                                                                    \n"
-    ";       Wait for line to go idle                                    \n"
+    ";       Wait for stop bit / idle line                               \n"
     "                                                                    \n"
     "        clr   r30                                                   \n"
     "        clr   r31                                                   \n"
@@ -1547,7 +1557,7 @@ void dwReadBytes() {
     "        breq  dwr14           ; 1/2. If line stuck low              \n"
     "                                                                    \n"
     "        sbis  0x16,5          ; 1/2. Skip if Pin PB5 set            \n"
-    "        rjmp  dwr12           ; 2.   While no start bit             \n"
+    "        rjmp  dwr12           ; 2.   While not stop bit             \n"
     "                                                                    \n"
     ";       Check for buffer full and loop back to read next byte       \n"
     "                                                                    \n"
@@ -1558,7 +1568,18 @@ void dwReadBytes() {
     "                                                                    \n"
     "dwr14:  sei                   ; Re-enable interrupts                \n"
     "        sts   dwLen,r23                                             \n"
+    "                                                                    \n"
   :::"r21","r22","r23","r24","r25","r26","r27","r30","r31");
+}
+
+
+void dwWait() { // Wait for device to hit breakpoint OR debugger to request break
+  dwPinChanged = 0;
+  dwBuf[0]     = 0;
+  dwLen        = 1;
+  cbi(DDRB,5);  // Set DDRB 5 (reset/dwire) as input
+  sbi(PCMSK,5); // Enable interrupt on dwire pin change
+  sei();
 }
 
 
@@ -1905,12 +1926,12 @@ int main(void) {
         //     00100000   0x20     Read pulse widths
         //
         // Supported combinations
-        //    33 - Send break and read pulse widths
-        //     2 - Set timing parameters
-        //     4 - Send bytes
-        //    20 - Send bytes and read response (normal command)
-        //    28 - Send bytes, wait and read response (e.g. after programming, run to BP)
-        //    36 - Send bytes and receive 0x55 pulse widths
+        //    $21 - Send break and read pulse widths
+        //    $02 - Set timing parameters
+        //    $04 - Send bytes
+        //    $08 - Send bytes, wait and capture pulse widths (for run to BP)
+        //    $14 - Send bytes and read response (normal command)
+        //    $24 - Send bytes and receive 0x55 pulse widths
         //
         // Note that the wait for start bit loop also monitors the dwState wait for start
         // bit flag, and is arranged so that sending a 33 (send break and read pulse widths)
@@ -1918,16 +1939,17 @@ int main(void) {
 
         if (dwState & 0x34) {_delay_ms(2);} // Allow USB transfer to complete before
                                             // any action that may disable interrupts
+
         if (dwState & 0x01) {cbi(PORTB, 5); sbi(DDRB, 5); _delay_ms(100);}
         if (dwState & 0x02) {((char*)&dwBitTime)[0] = dwBuf[0]; ((char*)&dwBitTime)[1] = dwBuf[1];}
         if (dwState & 0x04) {dwSendBytes();}
-      //if (dwState & 0x08) {dwWaitStart();}
+        if (dwState & 0x08) {dwWait();}
         if (dwState & 0x10) {dwReadBytes();}
         if (dwState & 0x20) {dwCaptureWidths();}
 
-        asm("        sei\n");
         jobState = 0;
         dwState  = 0;
+        sei();
       break;
 
 
@@ -1935,6 +1957,14 @@ int main(void) {
         jobState=0;
       break;
     }
+
+
+    if (dwPinChanged) {
+      dwPinChanged = 0;
+      dwBuf[0] = 1;
+      cbi(PCMSK,5); // Disable interrupt on dwire pin change
+    }
+
 
     if(softPWM)
     {

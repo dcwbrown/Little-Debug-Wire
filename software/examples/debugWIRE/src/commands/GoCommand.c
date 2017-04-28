@@ -9,8 +9,8 @@
 //}
 
 void KeyboardBreak() {
-  Wsl("Keyboard requested break."); SkipEoln();
-  BreakAndSync();
+  Ws("Keyboard requested break. "); SkipEoln();
+  DwBreakAndSync();
   DwReconnect();
 }
 
@@ -29,6 +29,13 @@ void KeyboardBreak() {
       //    DeviceBreak();
       //    break;
       //  }
+
+      if (dwReachedBreakpoint()) {
+        Wsl("\rDevice reached breakpoint.                                        ");
+        DwReconnect();
+        break;
+      }
+
       // See if there's a user pressing a key
       if (Interactive(Input)) {
         DWORD bytesAvailable;

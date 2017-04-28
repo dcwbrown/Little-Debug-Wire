@@ -116,10 +116,10 @@ extern void usbEventResetReady(void);
 /* -------------------------- Device Description --------------------------- */
 
 /*
-	Please note: Do not use the Adafruit USB VID/PID without written permission 
-	from Adafruit Industries, LLC and Limor "Ladyada" Fried 
-	(support@adafruit.com). Permission is granted for littlewire, Ihsan Kehribar 
-	and Seeed Studio by Adafruit Industries, LLC to use the Adafruit 
+	Please note: Do not use the Adafruit USB VID/PID without written permission
+	from Adafruit Industries, LLC and Limor "Ladyada" Fried
+	(support@adafruit.com). Permission is granted for littlewire, Ihsan Kehribar
+	and Seeed Studio by Adafruit Industries, LLC to use the Adafruit
 	USB VID/PID for littlewire (SKU:AVR06071P)
 */
 
@@ -160,7 +160,7 @@ extern void usbEventResetReady(void);
  * the macros. See the file USBID-License.txt before you assign a name if you
  * use a shared VID/PID.
  */
-#define USB_CFG_SERIAL_NUMBER   '5', '1' , '2' 
+#define USB_CFG_SERIAL_NUMBER   '5', '1' , '2'
 #define USB_CFG_SERIAL_NUMBER_LEN   3
 /* Same as above for the serial number. If you don't want a serial number,
  * undefine the macros.
@@ -273,5 +273,41 @@ extern void usbEventResetReady(void);
 
 //#define USB_INTR_VECTOR 		INT0_vect
 //#define USB_INTR_VECTOR 		PCINT9_vect
+
+
+
+
+/* Record non-USB pin change interrupt by setting a flag.
+
+   This assembler code is included by usbdrvasm*.inc where the KJKJKJKK sync
+   detect code has failed to detect a sync.
+
+   Where the USB line is inactive, as in the case we are interested in, this
+   code is reached in 31 cycles, the sbis sampling happening 33 cycles after
+   the pin change.
+
+   This is a 2 microsecond delay. Given a normal dWIRE baud of 1/128th of the
+   device clock speed, and allowing a fast max clock speed of 32 MHz, that
+   gives a baud rate of 250 kbaud, that is, a bit time of 4 microseconds.
+
+   Therefore we are successfully samping the pin well within the shortest
+   reasonable expected bit time.
+
+*/
+
+
+#ifdef __ASSEMBLER__
+macro nonUsbPinChange
+    .global dwPinChanged
+    ldi   YL,1
+    sbis  PINB,5
+    sts   dwPinChanged,YL
+    endm
+#endif
+
+#define USB_SOF_HOOK nonUsbPinChange
+
+
+
 
 #endif /* __usbconfig_h_included__ */

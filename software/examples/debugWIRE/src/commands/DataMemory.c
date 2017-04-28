@@ -69,6 +69,10 @@ void ParseWriteParameters(char *context, int *addr, int limit, u8 *buf, int *len
 
 
 void WriteDataBytesCommand() {
-  Fail("Write data command not yet implemented.");
+  u8 buf[16];
+  int addr;
+  int len;
+  ParseWriteParameters("Data memory write", &addr, DataLimit(), buf, &len);
+  if (len) {DwWriteAddr(addr, len, buf);}
 }
 
