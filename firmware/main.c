@@ -177,7 +177,6 @@ volatile uint8_t dwBuf[128];
 volatile uint8_t dwLen;        // Length being received from host or avr device
 volatile uint8_t dwIn;         // Input pointer: where usbDwFunctionWrite writes into dwBuf
 volatile uint8_t dwState;      // Current debugWIRE action underway, 0 if none
-uchar            dwPinChanged; // Flags activity on dWIRE line when device running
 // ----------------------------------------------------------------------
 
 
@@ -1399,7 +1398,7 @@ void dwSendBytes() {
     "                                                                    \n"
     "        lds   r23,dwLen                                             \n"
     "        tst   r23                                                   \n"
-    "        breq  dws14           ; If no bytes to transmit             \n"
+    "        breq  dws12           ; If no bytes to transmit             \n"
     "                                                                    \n"
     ";       Disable interrupts during transmission                      \n"
     "                                                                    \n"
@@ -1449,19 +1448,9 @@ void dwSendBytes() {
     "        brne  dws10           ; 1/2. While more waiting required    \n"
     "                                                                    \n"
     "        dec   r23                                                   \n"
-    "        breq  dws14           ; If no more bytes to transmit        \n"
+    "        brne  dws2            ; While more bytes to transmit        \n"
     "                                                                    \n"
-    ";       Hold line at mark (idle) for one more bit time to allow     \n"
-    ";       device to digest any command.                               \n"
-    "                                                                    \n"
-    "        movw  r30,r24                                               \n"
-    "                                                                    \n"
-    "dws12:  sbiw  r30,1           ; 2.   Decrement wait count           \n"
-    "        brne  dws12           ; 1/2. While more waiting required    \n"
-    "                                                                    \n"
-    "        rjmp  dws2            ; Loop back to send next byte         \n"
-    "                                                                    \n"
-    "dws14:  cbi   0x17,5          ; DDRB pin5 is input                  \n"
+    "dws12:  cbi   0x17,5          ; DDRB pin5 is input                  \n"
     "                                                                    \n"
   :::"r21","r22","r23","r24","r25","r26","r27","r30","r31");
 }
@@ -1570,16 +1559,6 @@ void dwReadBytes() {
     "        sts   dwLen,r23                                             \n"
     "                                                                    \n"
   :::"r21","r22","r23","r24","r25","r26","r27","r30","r31");
-}
-
-
-void dwWait() { // Wait for device to hit breakpoint OR debugger to request break
-  dwPinChanged = 0;
-  dwBuf[0]     = 0;
-  dwLen        = 1;
-  cbi(DDRB,5);  // Set DDRB 5 (reset/dwire) as input
-  sbi(PCMSK,5); // Enable interrupt on dwire pin change
-  sei();
 }
 
 
@@ -1943,7 +1922,7 @@ int main(void) {
         if (dwState & 0x01) {cbi(PORTB, 5); sbi(DDRB, 5); _delay_ms(100);}
         if (dwState & 0x02) {((char*)&dwBitTime)[0] = dwBuf[0]; ((char*)&dwBitTime)[1] = dwBuf[1];}
         if (dwState & 0x04) {dwSendBytes();}
-        if (dwState & 0x08) {dwWait();}
+        if (dwState & 0x08) {dwBuf[0]=0; dwLen=1; cbi(DDRB,5); sbi(PCMSK,5); sei();} // Capture dWIRE pin change
         if (dwState & 0x10) {dwReadBytes();}
         if (dwState & 0x20) {dwCaptureWidths();}
 
@@ -1956,13 +1935,6 @@ int main(void) {
       default:
         jobState=0;
       break;
-    }
-
-
-    if (dwPinChanged) {
-      dwPinChanged = 0;
-      dwBuf[0] = 1;
-      cbi(PCMSK,5); // Disable interrupt on dwire pin change
     }
 
 

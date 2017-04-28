@@ -290,18 +290,51 @@ extern void usbEventResetReady(void);
    device clock speed, and allowing a fast max clock speed of 32 MHz, that
    gives a baud rate of 250 kbaud, that is, a bit time of 4 microseconds.
 
-   Therefore we are successfully samping the pin well within the shortest
+   Therefore we are successfully sampling the pin well within the shortest
    reasonable expected bit time.
 
-*/
+   If the 0x55 from the device hits during USB packet handling it depends
+   whether the USB packet handling completes before the last low pulse of
+   the 0x55 arrives.
 
+   The 0x55 is sent as start bit, 55 lsb first, stop bit:
+   ___   _   _   _   _   _ ___
+      |_| |_| |_| |_| |_| |___
+       S 1 0 1 0 1 0 1 0 S
+       t                 t
+       a                 o
+       r                 p
+       t
+
+   At our worst case o 4μs per bit, that's 36μs from the first transition
+   from idle to 0 until the last one.
+
+   USB start of frame and token packets are 32 bits long, and should be
+   handled within around 25μs (?), so these whould be fine.
+
+   However a USB data packet, including a payload of the maximimum 8 bytes,
+   can take 70μs, so if the device reports break during one of these, we
+   could miss it.
+
+   Then again, the 0x55 should be preceeded by a break, whiich must also last
+   at least one byte time, or 40μs. Therefore we should test for dwpin
+   low at end of usb token handling.
+
+   On detecting a non-idle dwdebugWIRE line, set dwBuf[0] to 1 and disable
+   further interrupts from the debugWIRE pin changing.
+*/
 
 #ifdef __ASSEMBLER__
 macro nonUsbPinChange
-    .global dwPinChanged
+    .global dwBuf
+    sbic  PINB,5
+    rjmp  dWirePinIdle
+
     ldi   YL,1
-    sbis  PINB,5
-    sts   dwPinChanged,YL
+    sts   dwBuf,YL
+    cbi   PCMSK,5    ; Disable further interrupts on dwire pin change
+
+dWirePinIdle:
     endm
 #endif
 
