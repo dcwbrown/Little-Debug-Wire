@@ -561,14 +561,6 @@ void ws2812_preload(littleWire* lwHandle, unsigned char r,unsigned char g,unsign
 
 
 
-int dw_connect(littleWire* lwHandle);
-int dw_transfer(littleWire* lwHandle, char *out, int outlen, char *in, int inlen);
-
-
-
-
-
-
   /*! @} */
 
 
