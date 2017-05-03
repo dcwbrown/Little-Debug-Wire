@@ -8,15 +8,19 @@ u8 SPMCSR;
 
 void ReadConfigBits(u8 pmc, u8 index, u8 *dest) {
   u16 outr0 = 0xB800 | ((DWDRreg() & 0x30) << 5) | (DWDRreg() & 0xF);
-  DwWriteAndRead(ByteArrayLiteral(
-    0x66, 0xD0, 0, 29, 0xD1, 0, 32,        // Set PC=29, BP=32 - address registers r29 through r31
-    0xC2, 5, 0x20, pmc, index, 0,          // Set r29 to BLBSET LPM flags, and Z to desired fuse index
+  DwSend(Bytes(
+    0x66,                                  // Register or memory access mode
+    0xD0, 0x10, 29,                        // Set up to set registers starting from r29
+    0xD1, 0x10, 32,                        // Register limit is 32 (i.e. stop at r31)
+    0xC2, 0x05, 0x20,                      // Select reigster write mode and start
+    pmc, index, 0,                         // Set r29 to BLBSET LPM flags, and Z to desired fuse index
     0xD0, hi(BootSect()), lo(BootSect()),  // Set PC inside the boot section to enable spm
-    0x64, 0xD2, 0xBF, 0xD7, 0x23,          // OUT SPMCSR,r29
+    0x64,                                  // Non volatile memory access mode
+    0xD2, 0xBF, 0xD7, 0x23,                // OUT SPMCSR,r29
     0xD2, 0x95, 0xC8, 0x23,                // LPM: Reads fuse or lock bits to R0
-    0xD2, hi(outr0), lo(outr0), 0x23),     // OUT DRDW,r0
-    dest, 1
-  );
+    0xD2, hi(outr0), lo(outr0), 0x23       // OUT DRDW,r0
+  ));
+  DwReceive(dest, 1);
 }
 
 void DumpConfig() {
@@ -63,20 +67,27 @@ void DumpConfig() {
   }
 }
 
-void ReadSPMCSR() {
-  DwWriteAndRead(ByteArrayLiteral(
-    0x66, 0xD0, 0,0x1e, 0xD1, 0,0x20,       // Set PC=0x001E, BP=0x0020 (i.e. address register Z)
-    0xC2, 5, 0x20, 0x57, 0,                 // Address SPMCSR
-    0xD0, 0,0, 0xD1, 0, 2,                  // Set PC=0, BP=2*length
-    0xC2, 0, 0x20),                         // Start the read
-    &SPMCSR, 1
-  );
+
+u16 InInstruction (u16 io, u16 reg) {return 0xB000 | ((io << 5) & 0x600) | ((reg << 4) & 0x01F0) | (io & 0x000F);}
+u16 OutInstruction(u16 io, u16 reg) {return 0xB800 | ((io << 5) & 0x600) | ((reg << 4) & 0x01F0) | (io & 0x000F);}
+
+
+u8 ReadSPMCSR() {
+  u8  spmcsr;
+  u16 inSPMCSR = InInstruction (0x57, 30);      // in r30,SPMCSR
+  u16 outR30   = OutInstruction(DWDRreg(), 30); // out DWDR,r30
+  DwSend(Bytes(
+    0x64,                                       // Non volatile memory access mode
+    0xD2, hi(inSPMCSR), lo(inSPMCSR), 0x23,     // in r30,SPMCSR
+    0xD2, hi(outR30),   lo(outR30),   0x23      // out DWDR,r30
+  ));
+  DwReceive(&spmcsr, 1);
+  return spmcsr;
 }
 
-void LogSPMCSR() {Ws("SPMCSR = "); ReadSPMCSR(); Wx(SPMCSR,2); Wl();}
 
 
-// Smallest boots size is 128 words on atmega 88 and 168.
+// Smallest boot size is 128 words on atmega 88 and 168.
 // Smallest boot size on atmega328 is 256 words.
 
 void DwReadFlash(int addr, int len, u8 *buf) {
@@ -85,14 +96,18 @@ void DwReadFlash(int addr, int len, u8 *buf) {
   while (addr < limit) {
     int length = min(limit-addr, 64); // Read no more than 64 bytes at a time so PC remains in valid address space.
     //Ws("ReadFlashBlock at $"); Wx(addr,1); Ws(", length $"); Wx(length,1); Wl();
-    DwWriteAndRead(ByteArrayLiteral(
-      0x66, 0xD0, 0,0x1e, 0xD1, 0,0x20,           // Set PC=0x001E, BP=0x0020 (i.e. address register Z)
-      0xC2, 5, 0x20, lo(addr),hi(addr),           // Write addr to Z
-      0xD0, hi(BootSect()), lo(BootSect()),       // Set PC that allows access to all of flash
-      0xD1, hi(BootSect()+2*length), lo(BootSect()+2*length), // Set BP to stop after length reads
-      0xC2, 2, 0x20),                             // Read length bytes from flash starting at first
-      buf, length
-    );
+
+    DwSend(Bytes(
+      0x66,                // Access registers/memory mode
+      0xD0, 0x10, 0x1E,    // PC := 0x1E (Address r30/r31 aka Z)
+      0xD1, 0x10, 0x20,    // BP := 0x20
+      0xC2, 0x05, 0x20,    // Start writing Z
+      lo(addr), hi(addr),  // Z := addr
+      0xD0, hi(BootSect()), lo(BootSect()), // Set PC that allows access to all of flash
+      0xD1, 0x10 | hi(BootSect()+2*length), 0x10 | lo(BootSect()+2*length), // Set BP to stop after length reads
+      0xC2, 0x02, 0x20     // Set flash read mode and start reading
+    ));
+    DwReceive(buf, length);
     addr += length;
     buf  += length;
   }
@@ -101,36 +116,42 @@ void DwReadFlash(int addr, int len, u8 *buf) {
 
 void EraseFlashPage(u16 a) { // a = byte address of first word of page
   // Uses r29, r30, r31
-
-  Ws("Erasing flash page "); Wx(a,4); Wl();
-
   Assert((a & (PageSize()-1)) == 0);
-  DwWriteAndSync(ByteArrayLiteral(
-    0x66, 0xD0, 0, 29, 0xD1, 0, 32,       // Set PC=29, BP=32 - address registers r29 through r31
-    0xC2, 5, 0x20, PGERS, lo(a), hi(a),   // r29=op, Z=first byte address of page
+  DwSend(Bytes(
+    0x66,                                 // Register or memory access mode
+    0xD0, 0x10, 29,                       // Set up to set registers starting from r29
+    0xD1, 0x10, 32,                       // Register limit is 32 (i.e. stop at r31)
+    0xC2, 0x05, 0x20,                     // Select reigster write mode and start
+    PGERS, lo(a), hi(a),                  // r29=op, Z=first byte address of page
     0xD0, hi(BootSect()), lo(BootSect()), // Set PC that allows access to all of flash
-    0x64, 0xD2, 0xBF, 0xD7, 0x23,         // out SPMCSR,r29 (3=PGERS, 5=PGWRT)
+    0x64,                                 // Non volatile memory access mode
+    0xD2, 0xBF, 0xD7, 0x23,               // out SPMCSR,r29 (3=PGERS, 5=PGWRT)
     0xD2, 0x95, 0xE8, 0x33                // spm
   ));
+  DwSync();
 }
 
 void RenableRWW() {
-  Ws("RenableRWW called. "); LogSPMCSR();
-  DwWrite(ByteArrayLiteral(
-    0x66, 0xD0, 0, 29, 0xD1, 0, 30,       // Set PC=29, BP=30 - address registers r29
-    0xC2, 5, 0x20, RWWSRE,                // r29 = op (reenable RWW section)
-    0xD0, hi(BootSect()), lo(BootSect()), // Set PC that allows access to all of flash
-    0x64, 0xD2, 0xBF, 0xD7, 0x23,         // out SPMCSR,r29 (3=PGERS, 5=PGWRT)
-    0xD2, 0x95, 0xE8, 0x33                // spm
-  ));
+  if (BootSect()) {
+    u16 inr29 = InInstruction(DWDRreg(), 29);
+    DwSend(Bytes(
+      0xD0, hi(BootSect()), lo(BootSect()),     // Set PC that allows access to all of flash
+      0xD2, hi(inr29), lo(inr29), 0x23, RWWSRE, // in r29,DWDR. r29:= RWWSRE
+      0xD2, 0xBF, 0xD7, 0x23,                   // out SPMCSR,r29
+      0xD2, 0x95, 0xE8, 0x33                    // spm
+    ));
+    DwFlush();
+  }
 }
 
 void InitPageBuffer(u16 a) {
-  Ws("InitPageBuffer called. "); LogSPMCSR();
-  DwWrite(ByteArrayLiteral(
-    0x66, 0xD0, 0, 29, 0xD1, 0, 32,      // Set PC=29, BP=32 - address registers r29 through r31
-    0xC2, 5, 0x20, SPMEN, lo(a), hi(a),  // r29 = op (write next page buffer word), Z = first byte address of page
-    0x64
+  DwSend(Bytes(
+    0x66,                 // Register or memory access mode
+    0xD0, 0x10, 29,       // Set up to set registers starting from r29
+    0xD1, 0x10, 32,       // Register limit is 32 (i.e. stop at r31)
+    0xC2, 0x05, 0x20,     // Select reigster write mode and start
+    SPMEN, lo(a), hi(a),  // r29 = op (write next page buffer word), Z = first byte address of page
+    0x64                  // Non volatile memory access mode
   ));
 }
 
@@ -138,29 +159,13 @@ void InitPageBuffer(u16 a) {
 void LoadPageBuffer(const u8 *buf) {
   const u8 *p     = buf;
   const u8 *limit = buf + PageSize();
-  u16       inr0  = 0xB000 | ((DWDRreg() & 0x30) << 5) | (DWDRreg() & 0xF);
-  u16       inr1  = 0xB010 | ((DWDRreg() & 0x30) << 5) | (DWDRreg() & 0xF);
+  u16       inr0  = InInstruction(DWDRreg(), 0); // 0xB000 | ((DWDRreg() & 0x30) << 5) | (DWDRreg() & 0xF);
+  u16       inr1  = InInstruction(DWDRreg(), 1); // 0xB010 | ((DWDRreg() & 0x30) << 5) | (DWDRreg() & 0xF);
   while (p < limit) {
-    DwWrite(ByteArrayLiteral(
-      0x64,                                   // D2 using instruction
+    DwSend(Bytes(
       0xD2, hi(inr0), lo(inr0), 0x23, *(p++), // in r0,DWDR (low byte)
       0xD2, hi(inr1), lo(inr1), 0x23, *(p++), // in r1,DWDR (high byte)
       0xD0, hi(BootSect()), lo(BootSect()),   // Set PC that allows access to all of flash
-      0xD2, 0xBF, 0xD7, 0x23,                 // out SPMCSR,r29 (write next page buffer word)
-      0xD2, 0x95, 0xE8, 0x23,                 // spm
-      0xD2, 0x96, 0x32, 0x23,                 // adiw Z,2
-      0xD2, hi(inr0), lo(inr0), 0x23, *(p++), // in r0,DWDR (low byte)
-      0xD2, hi(inr1), lo(inr1), 0x23, *(p++), // in r1,DWDR (high byte)
-      0xD2, 0xBF, 0xD7, 0x23,                 // out SPMCSR,r29 (write next page buffer word)
-      0xD2, 0x95, 0xE8, 0x23,                 // spm
-      0xD2, 0x96, 0x32, 0x23,                 // adiw Z,2
-      0xD2, hi(inr0), lo(inr0), 0x23, *(p++), // in r0,DWDR (low byte)
-      0xD2, hi(inr1), lo(inr1), 0x23, *(p++), // in r1,DWDR (high byte)
-      0xD2, 0xBF, 0xD7, 0x23,                 // out SPMCSR,r29 (write next page buffer word)
-      0xD2, 0x95, 0xE8, 0x23,                 // spm
-      0xD2, 0x96, 0x32, 0x23,                 // adiw Z,2
-      0xD2, hi(inr0), lo(inr0), 0x23, *(p++), // in r0,DWDR (low byte)
-      0xD2, hi(inr1), lo(inr1), 0x23, *(p++), // in r1,DWDR (high byte)
       0xD2, 0xBF, 0xD7, 0x23,                 // out SPMCSR,r29 (write next page buffer word)
       0xD2, 0x95, 0xE8, 0x23,                 // spm
       0xD2, 0x96, 0x32, 0x23                  // adiw Z,2
@@ -169,159 +174,20 @@ void LoadPageBuffer(const u8 *buf) {
 }
 
 
-
 void ProgramPage(u16 a) {
-  Ws("ProgramPage called. "); LogSPMCSR();
-  DwWrite(ByteArrayLiteral(
-    0x66, 0xD0, 0, 29, 0xD1, 0, 32,      // Set PC=29, BP=32 - address registers r29 through r31
-    0xC2, 5, 0x20, PGWRT, lo(a), hi(a),  // r29 = op (page write), Z = first byte address of page
-    0xD0, hi(BootSect()), lo(BootSect()),// Set PC that allows access to all of flash
-    0x64, 0xD2, 0xBF, 0xD7, 0x23,        // out SPMCSR,r29 (3=PGERS, 5=PGWRT)
-    0xD2, 0x95, 0xE8, 0x23               // spm
+  DwSend(Bytes(
+    0x66,                                 // Register or memory access mode
+    0xD0, 0x10, 29,                       // Set up to set registers starting from r29
+    0xD1, 0x10, 32,                       // Register limit is 32 (i.e. stop at r31)
+    0xC2, 0x05, 0x20,                     // Select reigster write mode and start
+    PGWRT, lo(a), hi(a),                  // r29 = op (page write), Z = first byte address of page
+    0xD0, hi(BootSect()), lo(BootSect()), // Set PC that allows access to all of flash
+    0x64,                                 // Non volatile memory access mode
+    0xD2, 0xBF, 0xD7, 0x23,               // out SPMCSR,r29 (3=PGERS, 5=PGWRT)
+    0xD2, 0x95, 0xE8, 0x23                // spm
   ));
-  Ws("SPM executed. "); LogSPMCSR();
-  while ((SPMCSR & 0x1F) != 0) {Ws("Waiting for SPM to complete. "); LogSPMCSR();}
-}
-
-void ProgramFlashPage(u16 a, const u8 *buf) {
-  //const u16 *p = (const u16*)buf;
-  Ws("ProgramFlashPage called. "); LogSPMCSR();
-  InitPageBuffer(a);
-  //for (int i=0; i<PageSize()/2; i++) {AddWordToPageBuffer(*(p++));}
-  LoadPageBuffer(buf);
-  ProgramPage(a);
-  RenableRWW();
-}
-
-
-u16 InInstruction (u16 io, u16 reg) {return 0xB000 | ((io << 5) & 0x600) | ((reg << 4) & 0x01F0) | (io & 0x000F);}
-u16 OutInstruction(u16 io, u16 reg) {return 0xB800 | ((io << 5) & 0x600) | ((reg << 4) & 0x01F0) | (io & 0x000F);}
-
-void DwReadEEPROM(int addr, int len, u8 *buf)
-{
-  u8 quint[5];
-
-  u16  eearh = EEARH() ? EEARH() : EEDR(); // Dump address high harmelssly in data reg on chips with no address high
-  u16 outEearlR30 = OutInstruction(EEARL(), 30);
-  u16 outEearhR31 = OutInstruction(eearh,   31);
-  u16 outEecrR29  = OutInstruction(EECR(),  29);
-  u16 inR0Eedr    = InInstruction (EEDR(),   0);
-  u16 inR1Eedr    = InInstruction (EEDR(),   1);
-  u16 inR2Eedr    = InInstruction (EEDR(),   2);
-  u16 inR3Eedr    = InInstruction (EEDR(),   3);
-  u16 inR4Eedr    = InInstruction (EEDR(),   4);
-  u16 adiwR30x1   = 0x9631;
-
-  int limit = addr + len;
-  if (limit > EepromSize()) {Fail("Attempt to read beyond end of EEPROM.");}
-
-  // Preload registers: r29 = EECR read flag, r31:r30 = EEPROM address
-  DwWrite(ByteArrayLiteral(
-    0x66,
-    0xD0, 0x00, 0x1D,    // Set PC=0x001c
-    0xD1, 0x00, 0x20,    // Set BP=0x0020: address registers 29-31
-    0xC2, 0x05, 0x20,    // Transfer to registers
-    0x01,                // r29 := 1
-    lo(addr), hi(addr)   // r31:r30 := address
-  ));
-
-  delay(5);  // I wish I knew why this is necessary
-
-  // Read all requested bytes
-  while (addr < limit) {
-
-    DwWriteAndRead(ByteArrayLiteral(
-      0x64,
-      0xD2, hi(outEearlR30), lo(outEearlR30), 0x23,   // out  EEARL,r30 - Set read address
-      0xD2, hi(outEearhR31), lo(outEearhR31), 0x23,   // out  EEARH,r31 (writes EEDR harmlessly on chips without EEARH)
-      0xD2, hi(outEecrR29),  lo(outEecrR29),  0x23,   // out  EECR,r29  - start EEPROM read
-      0xD2, hi(adiwR30x1),   lo(adiwR30x1),   0x23,   // adi  r31:r30,1 - Address next eeprom byte
-      0xD2, hi(inR0Eedr),    lo(inR0Eedr),    0x23,   // in   r0,EEDR   - load EEPROM value to R0
-
-      0xD2, hi(outEearlR30), lo(outEearlR30), 0x23,   // out  EEARL,r30 - Set read address
-      0xD2, hi(outEearhR31), lo(outEearhR31), 0x23,   // out  EEARH,r31 (writes EEDR harmlessly on chips without EEARH)
-      0xD2, hi(outEecrR29),  lo(outEecrR29),  0x23,   // out  EECR,r29  - start EEPROM read
-      0xD2, hi(adiwR30x1),   lo(adiwR30x1),   0x23,   // adi  r31:r30,1 - Address next eeprom byte
-      0xD2, hi(inR1Eedr),    lo(inR1Eedr),    0x23,   // in   r1,EEDR   - load EEPROM value to R1
-
-      0xD2, hi(outEearlR30), lo(outEearlR30), 0x23,   // out  EEARL,r30 - Set read address
-      0xD2, hi(outEearhR31), lo(outEearhR31), 0x23,   // out  EEARH,r31 (writes EEDR harmlessly on chips without EEARH)
-      0xD2, hi(outEecrR29),  lo(outEecrR29),  0x23,   // out  EECR,r29  - start EEPROM read
-      0xD2, hi(adiwR30x1),   lo(adiwR30x1),   0x23,   // adi  r31:r30,1 - Address next eeprom byte
-      0xD2, hi(inR2Eedr),    lo(inR2Eedr),    0x23,   // in   r2,EEDR   - load EEPROM value to R2
-
-      0xD2, hi(outEearlR30), lo(outEearlR30), 0x23,   // out  EEARL,r30 - Set read address
-      0xD2, hi(outEearhR31), lo(outEearhR31), 0x23,   // out  EEARH,r31 (writes EEDR harmlessly on chips without EEARH)
-      0xD2, hi(outEecrR29),  lo(outEecrR29),  0x23,   // out  EECR,r29  - start EEPROM read
-      0xD2, hi(adiwR30x1),   lo(adiwR30x1),   0x23,   // adi  r31:r30,1 - Address next eeprom byte
-      0xD2, hi(inR3Eedr),    lo(inR3Eedr),    0x23,   // in   r3,EEDR   - load EEPROM value to R3
-
-      0xD2, hi(outEearlR30), lo(outEearlR30), 0x23,   // out  EEARL,r30 - Set read address
-      0xD2, hi(outEearhR31), lo(outEearhR31), 0x23,   // out  EEARH,r31 (writes EEDR harmlessly on chips without EEARH)
-      0xD2, hi(outEecrR29),  lo(outEecrR29),  0x23,   // out  EECR,r29  - start EEPROM read
-      0xD2, hi(adiwR30x1),   lo(adiwR30x1),   0x23,   // adi  r31:r30,1 - Address next eeprom byte
-      0xD2, hi(inR4Eedr),    lo(inR4Eedr),    0x23,   // in   r4,EEDR   - load EEPROM value to R4
-
-      0x66, 0xD0, 0, 0, 0xD1, 0, 5, 0xC2, 1, 0x20),   // Read registers r0,r1,r2,r3,r4
-      quint, 5
-    );
-
-    int i = 0;
-    while (i < 5  &&  addr < limit) {
-      *buf = quint[i];
-      buf++;
-      addr++;
-      i++;
-    }
-  }
-}
-
-
-void DwWriteEEPROM(int addr, int len, u8 *buf)
-{
-  //Ws("DwWriteEEPROM($"); Wx(addr,4); Ws(", "); Wd(len,1); Wsl(", buf);");
-
-  int eearh = EEARH() ? EEARH() : EEDR(); // Dump address high harmelssly in data reg on chips with no address high
-  u16 inR0Dwdr    = InInstruction (DWDRreg(),  0);
-  u16 outEedrR0   = OutInstruction(EEDR(),     0);
-  u16 outEecrR28  = OutInstruction(EECR(),    28);
-  u16 outEecrR29  = OutInstruction(EECR(),    29);
-  u16 outEearlR30 = OutInstruction(EEARL(),   30);
-  u16 outEearhR31 = OutInstruction(eearh,     31);
-  u16 adiwR30x1   = 0x9631;
-
-  int limit = addr + len;
-  if (limit > EepromSize()) {Fail("Attempt to write beyond end of EEPROM.");}
-
-  // Preload registers:
-  //   r28     - EEMWE flag (4)
-  //   r29     - EEWE flag (2)
-  //   r31:r30 - Initial EEPROM address
-
-  DwWrite(ByteArrayLiteral(
-    0x66,
-    0xD0, 0,0x1C, 0xD1, 0,0x20,              // Set PC=0x001c, BP=0x0020: address registers 28-31
-    0xC2, 5, 0x20, 4, 2, lo(addr),hi(addr)   // r28 := 4, r29 := 2, r31:r30 := address
-  ));
-
-  //delay(5); // Allow register set to complete (why is this necessary?)
-
-  // Write all requested bytes
-  while (addr < limit) {
-    DwWrite(ByteArrayLiteral(
-      0x64,
-      0xD2, hi(outEearlR30), lo(outEearlR30), 0x23,       // out  EEARL,r30 - Set read address
-      0xD2, hi(outEearhR31), lo(outEearhR31), 0x23,       // out  EEARH,r31 (does nothing on chips without EEARH)
-      0xD2, hi(inR0Dwdr),    lo(inR0Dwdr),    0x23, *buf, // in   r0,DWDR (read next byte being written to EEPROM)
-      0xD2, hi(outEedrR0),   lo(outEedrR0),   0x23,       // out  EEDR,R0
-      0xD2, hi(outEecrR28),  lo(outEecrR28),  0x23,       // out  EECR,r28  - Master EEPROM program enable
-      0xD2, hi(outEecrR29),  lo(outEecrR29),  0x23,       // out  EECR,r29  - Enable EEPROM program write
-      0xD2, hi(adiwR30x1),   lo(adiwR30x1),   0x23        // adi  r31:r30,1 - Address next eeprom byte
-    ));
-    buf++;
-    addr++;
-    delay(5); // Allow eeprom write to complete.
-  }
+  // Wait for page programming to complete
+  while ((ReadSPMCSR() & 0x1F) != 0) Wc('.');
 }
 
 
@@ -331,6 +197,8 @@ void ShowPageStatus(u16 a, char *msg) {
   Ws("$"); Wx(a,4); Ws(" - $"); Wx(a+PageSize()-1,4);
   Wc(' '); Ws(msg); Ws(".                "); Wr();
 }
+
+
 
 
 void WriteFlashPage(u16 a, const u8 *buf) {
@@ -348,6 +216,16 @@ void WriteFlashPage(u16 a, const u8 *buf) {
     return;
   }
 
+  //  // Debugging, what's different???
+  //  Wl();
+  //  Ws("Difference found for page at $"); Wx(a,4); Wsl(".");
+  //  Wsl("Existing page contains:");
+  //  DumpBytes(0, PageSize(), page); Wl();
+  //  Wsl("New page contains:");
+  //  DumpBytes(0, PageSize(), buf); Wl();
+  //  Fail("Aborting");
+
+
   int erase = 0;
   for (int i=0; i<PageSize(); i++) {
     if (~page[i] & buf[i]) {erase=1; break;}
@@ -363,8 +241,14 @@ void WriteFlashPage(u16 a, const u8 *buf) {
     return;
   }
 
- ShowPageStatus(a, "programming");
- ProgramFlashPage(a, buf);
+  ShowPageStatus(a, "loading page buffer");
+  InitPageBuffer(a);
+  LoadPageBuffer(buf);
+
+  ShowPageStatus(a, "programming");
+  ProgramPage(a);
+
+  RenableRWW();
 }
 
 
@@ -468,6 +352,141 @@ void WriteFlashBytesCommand() {
   int len;
   ParseWriteParameters("Flash write", &addr, FlashSize(), buf, &len);
   if (len) {WriteFlash(addr, buf, len);}
+}
+
+
+
+
+
+
+void DwReadEEPROM(int addr, int len, u8 *buf)
+{
+  u8 quint[5];
+
+  u16  eearh = EEARH() ? EEARH() : EEDR(); // Dump address high harmelssly in data reg on chips with no address high
+  u16 outEearlR30 = OutInstruction(EEARL(), 30);
+  u16 outEearhR31 = OutInstruction(eearh,   31);
+  u16 outEecrR29  = OutInstruction(EECR(),  29);
+  u16 inR0Eedr    = InInstruction (EEDR(),   0);
+  u16 inR1Eedr    = InInstruction (EEDR(),   1);
+  u16 inR2Eedr    = InInstruction (EEDR(),   2);
+  u16 inR3Eedr    = InInstruction (EEDR(),   3);
+  u16 inR4Eedr    = InInstruction (EEDR(),   4);
+  u16 adiwR30x1   = 0x9631;
+
+  int limit = addr + len;
+  if (limit > EepromSize()) {Fail("Attempt to read beyond end of EEPROM.");}
+
+  // Preload registers: r29 = EECR read flag, r31:r30 = EEPROM address
+  DwSend(Bytes(
+    0x66,               // Register or memory access mode
+    0xD0, 0x10, 29,     // Set up to set registers starting from r29
+    0xD1, 0x10, 32,     // Register limit is 32 (i.e. stop at r31)
+    0xC2, 0x05, 0x20,   // Select reigster write mode and start
+    0x01,               // r29 := 1
+    lo(addr), hi(addr)  // r31:r30 := address
+  ));
+
+  // Read all requested bytes
+  while (addr < limit) {
+
+    DwSend(Bytes(
+      0x64,                                           // Non volatile memory access mode
+
+      0xD2, hi(outEearlR30), lo(outEearlR30), 0x23,   // out  EEARL,r30 - Set read address
+      0xD2, hi(outEearhR31), lo(outEearhR31), 0x23,   // out  EEARH,r31 (writes EEDR harmlessly on chips without EEARH)
+      0xD2, hi(outEecrR29),  lo(outEecrR29),  0x23,   // out  EECR,r29  - start EEPROM read
+      0xD2, hi(adiwR30x1),   lo(adiwR30x1),   0x23,   // adi  r31:r30,1 - Address next eeprom byte
+      0xD2, hi(inR0Eedr),    lo(inR0Eedr),    0x23,   // in   r0,EEDR   - load EEPROM value to R0
+
+      0xD2, hi(outEearlR30), lo(outEearlR30), 0x23,   // out  EEARL,r30 - Set read address
+      0xD2, hi(outEearhR31), lo(outEearhR31), 0x23,   // out  EEARH,r31 (writes EEDR harmlessly on chips without EEARH)
+      0xD2, hi(outEecrR29),  lo(outEecrR29),  0x23,   // out  EECR,r29  - start EEPROM read
+      0xD2, hi(adiwR30x1),   lo(adiwR30x1),   0x23,   // adi  r31:r30,1 - Address next eeprom byte
+      0xD2, hi(inR1Eedr),    lo(inR1Eedr),    0x23,   // in   r1,EEDR   - load EEPROM value to R1
+
+      0xD2, hi(outEearlR30), lo(outEearlR30), 0x23,   // out  EEARL,r30 - Set read address
+      0xD2, hi(outEearhR31), lo(outEearhR31), 0x23,   // out  EEARH,r31 (writes EEDR harmlessly on chips without EEARH)
+      0xD2, hi(outEecrR29),  lo(outEecrR29),  0x23,   // out  EECR,r29  - start EEPROM read
+      0xD2, hi(adiwR30x1),   lo(adiwR30x1),   0x23,   // adi  r31:r30,1 - Address next eeprom byte
+      0xD2, hi(inR2Eedr),    lo(inR2Eedr),    0x23,   // in   r2,EEDR   - load EEPROM value to R2
+
+      0xD2, hi(outEearlR30), lo(outEearlR30), 0x23,   // out  EEARL,r30 - Set read address
+      0xD2, hi(outEearhR31), lo(outEearhR31), 0x23,   // out  EEARH,r31 (writes EEDR harmlessly on chips without EEARH)
+      0xD2, hi(outEecrR29),  lo(outEecrR29),  0x23,   // out  EECR,r29  - start EEPROM read
+      0xD2, hi(adiwR30x1),   lo(adiwR30x1),   0x23,   // adi  r31:r30,1 - Address next eeprom byte
+      0xD2, hi(inR3Eedr),    lo(inR3Eedr),    0x23,   // in   r3,EEDR   - load EEPROM value to R3
+
+      0xD2, hi(outEearlR30), lo(outEearlR30), 0x23,   // out  EEARL,r30 - Set read address
+      0xD2, hi(outEearhR31), lo(outEearhR31), 0x23,   // out  EEARH,r31 (writes EEDR harmlessly on chips without EEARH)
+      0xD2, hi(outEecrR29),  lo(outEecrR29),  0x23,   // out  EECR,r29  - start EEPROM read
+      0xD2, hi(adiwR30x1),   lo(adiwR30x1),   0x23,   // adi  r31:r30,1 - Address next eeprom byte
+      0xD2, hi(inR4Eedr),    lo(inR4Eedr),    0x23,   // in   r4,EEDR   - load EEPROM value to R4
+
+      0x66,                                           // Register or memory access mode
+      0xD0, 0x10, 0x00,                               // Set up to get registers starting from r0
+      0xD1, 0x10, 0x05,                               // Register limit is 5 (i.e. stop at r4)
+      0xC2, 0x01, 0x20                                // Select reigster read mode and start
+    ));
+    DwReceive(quint, 5);
+
+    int i = 0;
+    while (i < 5  &&  addr < limit) {
+      *buf = quint[i];
+      buf++;
+      addr++;
+      i++;
+    }
+  }
+}
+
+
+void DwWriteEEPROM(int addr, int len, u8 *buf)
+{
+  //Ws("DwWriteEEPROM($"); Wx(addr,4); Ws(", "); Wd(len,1); Wsl(", buf);");
+
+  int eearh = EEARH() ? EEARH() : EEDR(); // Dump address high harmelssly in data reg on chips with no address high
+  u16 inR0Dwdr    = InInstruction (DWDRreg(),  0);
+  u16 outEedrR0   = OutInstruction(EEDR(),     0);
+  u16 outEecrR28  = OutInstruction(EECR(),    28);
+  u16 outEecrR29  = OutInstruction(EECR(),    29);
+  u16 outEearlR30 = OutInstruction(EEARL(),   30);
+  u16 outEearhR31 = OutInstruction(eearh,     31);
+  u16 adiwR30x1   = 0x9631;
+
+  int limit = addr + len;
+  if (limit > EepromSize()) {Fail("Attempt to write beyond end of EEPROM.");}
+
+  // Preload registers:
+  //   r28     - EEMWE flag (4)
+  //   r29     - EEWE flag (2)
+  //   r31:r30 - Initial EEPROM address
+
+  DwSend(Bytes(
+    0x66,                     // Register or memory access mode
+    0xD0, 0x10, 28,           // Set up to set registers starting from r28
+    0xD1, 0x10, 32,           // Register limit is 32 (i.e. stop at r31)
+    0xC2, 0x05, 0x20,         // Select reigster write mode and start
+    4, 2, lo(addr), hi(addr)  // r28 := 4, r29 := 2, r31:r30 := address
+  ));
+
+  // Write all requested bytes
+  while (addr < limit) {
+    DwSend(Bytes(
+      0x64,                                               // Non volatile memory access mode
+      0xD2, hi(outEearlR30), lo(outEearlR30), 0x23,       // out  EEARL,r30 - Set read address
+      0xD2, hi(outEearhR31), lo(outEearhR31), 0x23,       // out  EEARH,r31 (does nothing on chips without EEARH)
+      0xD2, hi(inR0Dwdr),    lo(inR0Dwdr),    0x23, *buf, // in   r0,DWDR (read next byte being written to EEPROM)
+      0xD2, hi(outEedrR0),   lo(outEedrR0),   0x23,       // out  EEDR,R0
+      0xD2, hi(outEecrR28),  lo(outEecrR28),  0x23,       // out  EECR,r28  - Master EEPROM program enable
+      0xD2, hi(outEecrR29),  lo(outEecrR29),  0x23,       // out  EECR,r29  - Enable EEPROM program write
+      0xD2, hi(adiwR30x1),   lo(adiwR30x1),   0x23        // adi  r31:r30,1 - Address next eeprom byte
+    ));
+    DwFlush();
+    buf++;
+    addr++;
+    delay(5); // Allow eeprom write to complete.
+  }
 }
 
 

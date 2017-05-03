@@ -1908,7 +1908,7 @@ int main(void) {
         //    $21 - Send break and read pulse widths
         //    $02 - Set timing parameters
         //    $04 - Send bytes
-        //    $08 - Send bytes, wait and capture pulse widths (for run to BP)
+        //    $0C - Send bytes and wait for dWIRE line state change
         //    $14 - Send bytes and read response (normal command)
         //    $24 - Send bytes and receive 0x55 pulse widths
         //
