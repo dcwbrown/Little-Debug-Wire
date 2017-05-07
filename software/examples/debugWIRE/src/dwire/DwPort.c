@@ -153,9 +153,10 @@ char OutBufBytes[128];
 int  OutBufLength = 0;
 
 void dwBufferFlush(u8 state) {
-  Assert(OutBufLength > 0);
-  dwUSBSendBytes(state, OutBufBytes, OutBufLength);
-  OutBufLength = 0;
+  if (OutBufLength > 0) {
+    dwUSBSendBytes(state, OutBufBytes, OutBufLength);
+    OutBufLength = 0;
+  }
 }
 
 
@@ -224,10 +225,10 @@ void DwWait() {
 
 
 
+
+
 u8 hi(int w) {return (w>>8)&0xff;}
 u8 lo(int w) {return (w   )&0xff;}
-
-
 
 
 void SetSizes(int signature) {
@@ -245,55 +246,70 @@ void SetSizes(int signature) {
 
 
 
-void DwReadRegisters(u8 *registers, int first, int count) {
-  //Ws("DwReadRegisters(first "); Wd(first,1); Ws(", count "); Wd(count,1); Wsl(").");
-  // Read Registers (destroys PC and BP)
-  DwSend(Bytes(
-    0x66,                    // Access registers/memory mode
-    0xD0, 0x10, first,       // PC := first
-    0xD1, 0x10, first+count, // BP := limit
-    0xC2, 1, 0x20            // Start register read
-  ));
-  DwReceive(registers, count);
-}
+void DwSetPC(u16 pc) {DwSend(Bytes(0xD0, hi(pc)|0x10, lo(pc)));}
+void DwSetBP(u16 bp) {DwSend(Bytes(0xD1, hi(bp)|0x10, lo(bp)));}
+
+void DwInst(u16 inst) {DwSend(Bytes(0xD2, hi(inst), lo(inst), 0x23));}
+
+void DwIn(u8 reg, u16 ioreg)  {DwInst(0xB000 | ((ioreg << 5) & 0x600) | ((reg << 4) & 0x01F0) | (ioreg & 0x000F));}
+void DwOut(u16 ioreg, u8 reg) {DwInst(0xB800 | ((ioreg << 5) & 0x600) | ((reg << 4) & 0x01F0) | (ioreg & 0x000F));}
 
 
-void DwWriteRegisters(u8 *registers, int first, int count) {
-  //wsl("Write Registers.");
-  // Write Registers (destroys PC and BP)
-  DwSend(Bytes(
-    0x66,                    // Access registers/memory mode
-    0xD0, 0x10, first,       // PC := first
-    0xD1, 0x10, first+count, // BP := limit
-    0xC2, 5, 0x20            // Start register write
-  ));
-  DwSend(registers, count);
+
+// Register access
+//
+
+
+void DwGetRegs(int first, u8 *regs, int count) {
+  if (count == 1) {
+    DwOut(DWDRreg(), first);
+  } else {
+    DwSetPC(first);
+    DwSetBP(first+count);
+    DwSend(Bytes(0x66, 0xC2, 1, 0x20)); // Start register read
+  }
+  DwReceive(regs, count);
 }
+
+void DwSetReg(int reg, u8 val) {DwIn(reg, DWDRreg()); DwSend(Bytes(val));}
+
+void DwSetRegs(int first, const u8 *regs, int count) {
+  if (count <= 3) {
+    while (count > 0) {DwSetReg(first, *regs); first++; regs++; count--;}
+  } else {
+    DwSetPC(first);
+    DwSetBP(first+count);
+    DwSend(Bytes(0x66, 0xC2, 0x05, 0x20)); // Start register write
+    DwSend(regs, count);
+  }
+}
+
+void DwSetZ(u16 z) {DwSetRegs(30, (u8*)&z, 2);}
+
+
+
+// Data area access
+//
 
 
 void DwUnsafeReadAddr(int addr, int len, u8 *buf) {
   // Do not read addresses 30, 31 or DWDR as these interfere with the read process
-  DwSend(Bytes(
-    0x66,                            // Access registers/memory mode
-    0xD0, 0x10, 0x1E,                // PC := 0x1E (Address r30/r31 aka Z)
-    0xD1, 0x10, 0x20,                // BP := 0x20
-    0xC2, 0x05, 0x20,                // Start writing Z
-    lo(addr), hi(addr),              // Z := addr
-    0xD0, 0x10, 0x00,                // PC := 0
-    0xD1, 0x10|hi(len*2), lo(len*2), // BP := 2*length to read
-    0xC2, 0, 0x20                    // Start data area read
-  ));
+  DwSetZ(addr);
+  DwSetPC(0);
+  DwSetBP(2*len);
+  DwSend(Bytes(0x66, 0xC2, 0x00, 0x20)); // Start data area read
   DwReceive(buf, len);
 }
 
 void DwReadAddr(int addr, int len, u8 *buf) {
-  // Read range before r30
-  int len1 = min(len, 30-addr);
+  // Read range before r28
+  int len1 = min(len, 28-addr);
   if (len1 > 0) {DwUnsafeReadAddr(addr, len1, buf); addr+=len1; len-=len1; buf+=len1;}
 
-  // Registers 30 and 31 are cached - use the cached values.
-  if (addr == 30  &&  len > 0) {buf[0] = R30; addr++; len--; buf++;}
-  if (addr == 31  &&  len > 0) {buf[0] = R31; addr++; len--; buf++;}
+  // Some registers are cached - use the cached values.
+  while (addr >= 28  &&  addr <= 31  &&  len > 0) {
+    *buf = R[addr];  addr++;  len--;  buf++;
+  }
 
   // Read range from 32 to DWDR
   int len2 = min(len, DWDRaddr()-addr);
@@ -308,65 +324,34 @@ void DwReadAddr(int addr, int len, u8 *buf) {
 }
 
 
-void DwUnsafeWriteAddr(int addr, int len, const u8 *buf) {
-  // Do not write addresses 30, 31 or DWDR as these interfere with the write process
-
-  // Setup the write
-  DwSend(Bytes(
-    0x66,                      // Set up for read/write using repeating simulated instructions
-    0xD0, 0x10, 0x1e,          // PC := 0x001E
-    0xD1, 0x10, 0x20,          // BP := 0x0020 (i.e. address register Z)
-    0xC2, 0x05,                // Write register mode
-    0x20, lo(addr), hi(addr),  // Write SRAM address of first byte to Z
-    0xC2, 0x04,                // Write SRAM mode
-    0xD1, 0x10, 0x03           // Set BP=3
-  ));
-
-  // Write one byte at a time
+void DwWriteAddr(int addr, int len, const u8 *buf) {
+  DwSetZ(addr);
+  DwSetBP(3);
+  DwSend(Bytes(0x66, 0xC2, 0x04)); // Set data area write mode
   int limit = addr + len;
   while (addr < limit) {
-    int i = 0;
-    while (i < 120  &&  addr < limit) {
-      DwSend(Bytes(
-        0xD0, 0x10, 0x01, // PC := 0x0001
-        0x20, *buf        // Write one byte to data area
-      ));
-      addr++;
-      buf++;
+    if (addr < 28  ||  (addr > 31  &&  addr != DWDRaddr())) {
+      DwSetPC(1);
+      DwSend(Bytes(0x20, *buf)); // Write one byte to data area and increment Z
+    } else {
+      if (addr >= 28  &&  addr <= 31) {R[addr] = *buf;}
+      DwSetZ(addr+1);
     }
+    addr++;
+    buf++;
   }
 }
 
-void DwWriteAddr(int addr, int len, const u8 *buf) {
-  //Ws("DwWriteAddr(addr $"); Wx(addr,4); Ws(", len "); Wd(len,1); Wsl(", buf);");
-  // Write range before r30
-  int len1 = min(len, 30-addr);
-  if (len1 > 0) {DwUnsafeWriteAddr(addr, len1, buf); addr+=len1; len-=len1; buf+=len1;}
 
-  // Registers 30 and 31 are cached - update the cached values.
-  if (addr == 30  &&  len > 0) {R30 = buf[0]; addr++; len--; buf++;}
-  if (addr == 31  &&  len > 0) {R31 = buf[0]; addr++; len--; buf++;}
 
-  // Write range from 32 to DWDR
-  int len2 = min(len, DWDRaddr()-addr);
-  if (len2 > 0) {DwUnsafeWriteAddr(addr, len2, buf); addr+=len2; len-=len2; buf+=len2;}
-
-  // (Ignore anything for DWDR - as the DebugWIRE port it is in use and wouldn't retain a value anyway)
-  if (addr == DWDRaddr()  &&  len > 0) {addr++; len--; buf++;}
-
-  // Write anything beyond DWDR
-  if (len > 0) {DwUnsafeWriteAddr(addr, len, buf);}
-}
-
+// Start / stop
+//
 
 
 void DwReconnect() {
   DwSend(Bytes(0xF0));  // Request current PC
   PC = (2 * (DwReadWord() - 1) % FlashSize());
-  u8 buf[2];
-  DwReadRegisters(buf, 30, 2); // Read current r30/r31 aka Z
-  R30 = buf[0];
-  R31 = buf[1];
+  DwGetRegs(28, R+28, 4); // Cache r28 through r31
 }
 
 void DwConnect() {
@@ -388,45 +373,23 @@ void DwDisable() {
 
 
 void DwTrace() { // Execute one instruction
-  int p = PC/2;
-  DwSend(Bytes(
-    0x66,                      // Register or memory access mode
-    0xD0, 0x10, 30,            // Set up to set registers starting from r30
-    0xD1, 0x10, 32,            // Register limit is 32 (i.e. stop at r31)
-    0xC2, 0x05, 0x20,          // Select reigster write mode and start
-    R30, R31,                  // Cached value of r30 and r31
-    0x60, 0xD0, hi(p), lo(p),  // Address to restart execution at
-    0x31                       // Continue execution (single step)
-  ));
+  DwSetRegs(28, R, 4);       // Restore cached registers
+  DwSetPC(PC/2);             // Trace start address
+  DwSend(Bytes(0x60, 0x31)); // Single step
   DwSync();
   DwReconnect();
 }
 
 
 void DwGo() { // Begin executing.
-  int p = PC/2;
-  int b = BP/2;
-
-  DwSend(Bytes(
-    0x66,               // Register or memory access mode
-    0xD0, 0, 30,        // Set up to set registers starting from r30
-    0xD1, 0, 32,        // Register limit is 32 (i.e. stop at r31)
-    0xC2, 5, 0x20,      // Select reigster write mode and start
-    R30, R31,           // Cached value of r30 and r31
-    0xD0, hi(p), lo(p), // Set PC to address to restart execution at
-  ));
-
-  if (BP < 0) { // No breakpoint set
-    DwSend(Bytes(
-      TimerEnable ? 0x40 : 0x60 // Set execution context
-    ));
-  } else { // Start execution with breakpoint
-    DwSend(Bytes(
-      0xD1, hi(b), lo(b),       // Set breakpoint for execution to stop at
-      TimerEnable ? 0x41 : 0x61 // Set execution context including breakpoint enable
-    ));
+  DwSetRegs(28, R, 4);  // Restore cached registers
+  DwSetPC(PC/2);        // Execution start address
+  if (BP < 0) {         // Prepare to start execution with no breakpoint set
+    DwSend(Bytes(TimerEnable ? 0x40 : 0x60)); // Set execution context
+  } else {              // Prpare to start execution with breakpoint set
+    DwSetBP(BP/2);      // Breakpoint address
+    DwSend(Bytes(TimerEnable ? 0x41 : 0x61)); // Set execution context including breakpoint enable
   }
-
   DwSend(Bytes(0x30)); // Continue execution (go)
   DwWait();
 }

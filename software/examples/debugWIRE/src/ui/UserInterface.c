@@ -67,7 +67,7 @@ struct {char *name; char *help; int requiresConnection; void (*handler)();} Comm
   {"u",           "Unassemble",                                    1, UnassembleCommand},
   {"h",           "Help",                                          0, HelpCommand},
   {"reset",       "Reset processor",                               1, DwReset},
-  {"config",      "Display fuses, lockbits, signature and osccal", 1, DumpConfig},
+  {"config",      "Display fuses and lock bits",                   1, DumpConfig},
   {"help",        "Help",                                          0, HelpCommand},
   {"verbose",     "Set verbose mode",                              0, VerboseCommand},
   {"gdbserver",   "Start server for GDB",                          1, GdbserverCommand},
@@ -80,7 +80,7 @@ int IsInteractive = 0;
 
 void HelpCommand() {
   for (int i=0; Commands[i].help; i++) {
-    Ws("  "); Ws(Commands[i].name); Wt(12); Ws("- "); Wsl(Commands[i].help);
+    Ws("  "); Ws(Commands[i].name); Wt(12); Ws("- "); Ws(Commands[i].help); Wsl(".");
   }
 }
 
