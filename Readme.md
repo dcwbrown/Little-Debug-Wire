@@ -1,3 +1,9 @@
+# Little Debug Wire has moved
+
+This repository is obsolete.
+
+Please ```git clone github.com/dcwbrown/dwire-debug``` then ```git checkout lwire```.
+
 # Little Debug Wire
 
 Currently experimental with aspirations to adding debugWIRE support to the ISP porogramming support
